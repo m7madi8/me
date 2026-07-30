@@ -668,24 +668,72 @@ body {
   .app-frame {
     border-inline: none;
     box-shadow: none;
-    background: rgba(10, 10, 10, 0.72);
+    background: rgba(10, 10, 10, 0.92);
   }
   .header {
     padding: 12px 14px;
+    gap: 10px;
+  }
+  .brand {
+    gap: 10px;
+  }
+  .brand-mark {
+    font-size: 20px;
   }
   .btn-add {
     width: 38px;
     height: 38px;
     min-height: 38px;
   }
+  .totals,
+  .totals.soft {
+    gap: 8px;
+    padding: 12px 12px 6px;
+  }
+  .index-list {
+    padding: 8px 12px 96px !important;
+  }
+  .index-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    margin: 0 0 10px !important;
+    border: 1px solid var(--line-soft) !important;
+    background: rgba(18, 18, 18, 0.9) !important;
+  }
+  .index-row.is-active {
+    border-color: var(--line) !important;
+  }
+  .index-main {
+    padding: 14px 14px 8px !important;
+  }
+  .index-name {
+    white-space: normal !important;
+    font-size: 15px !important;
+  }
+  .index-actions {
+    display: flex !important;
+    width: 100%;
+    padding: 0 14px 12px !important;
+    gap: 8px;
+    box-sizing: border-box;
+  }
+  .index-actions .chev {
+    margin-inline-start: auto;
+  }
+  .wa-chip,
+  .demo-chip,
+  .chev {
+    margin: 0 !important;
+  }
 }
 
 @media (max-width: 480px) {
   .brand-mark {
-    font-size: 20px;
+    font-size: 17px;
+    letter-spacing: 0.03em;
   }
   .brand-logo {
-    height: 24px !important;
+    height: 22px !important;
   }
   .sync-full,
   .login-full {
@@ -696,7 +744,11 @@ body {
     display: inline;
   }
   .total-cell {
-    padding: 12px;
+    padding: 12px 10px;
+  }
+  .total-value,
+  .totals.soft .total-value {
+    font-size: 18px !important;
   }
   .title-input {
     font-size: 28px !important;

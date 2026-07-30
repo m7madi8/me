@@ -492,35 +492,39 @@ export default function MHLedger() {
                             )}
                           </div>
                         </button>
-                        {demo && (
-                          <a
-                            href={demo}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="demo-chip"
-                            onClick={(e) => e.stopPropagation()}
-                            title="Demo"
-                          >
-                            <ExternalLink size={13} />
-                            Demo
-                          </a>
-                        )}
-                        {link && (
-                          <a
-                            href={link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="wa-chip"
-                            onClick={(e) => e.stopPropagation()}
-                            title="WhatsApp"
-                          >
-                            <WhatsAppIcon size={14} />
-                          </a>
-                        )}
-                        {isMobile && (
-                          <button className="chev" onClick={() => setSelectedId(p.id)} aria-label="فتح">
-                            <ChevronRight size={16} />
-                          </button>
+                        {(demo || link || isMobile) && (
+                        <div className="index-actions">
+                          {demo && (
+                            <a
+                              href={demo}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="demo-chip"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Demo"
+                            >
+                              <ExternalLink size={13} />
+                              Demo
+                            </a>
+                          )}
+                          {link && (
+                            <a
+                              href={link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="wa-chip"
+                              onClick={(e) => e.stopPropagation()}
+                              title="WhatsApp"
+                            >
+                              <WhatsAppIcon size={14} />
+                            </a>
+                          )}
+                          {isMobile && (
+                            <button className="chev" onClick={() => setSelectedId(p.id)} aria-label="فتح">
+                              <ChevronRight size={16} />
+                            </button>
+                          )}
+                        </div>
                         )}
                       </div>
                     );
@@ -1105,7 +1109,7 @@ const CSS = `
     gap: 12px;
     min-width: 0;
     flex: 1;
-    padding: 10px 14px;
+    padding: 0;
   }
   .brand-meta {
     min-width: 0;
@@ -1904,7 +1908,7 @@ const CSS = `
   }
   .index-main {
     flex: 1;
-    text-align: left;
+    text-align: start;
     padding: 14px 16px 14px 18px;
     min-width: 0;
   }
@@ -1936,15 +1940,21 @@ const CSS = `
     font-size: 10.5px;
     color: ${INK.text};
   }
+  .index-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-inline-end: 10px;
+    flex-shrink: 0;
+  }
   .wa-chip, .chev {
     display: flex;
     align-items: center;
     justify-content: center;
-    align-self: center;
     width: 34px;
     height: 34px;
-    margin-inline-end: 10px;
-    border-radius: 50%;
+    margin: 0;
+    border-radius: 10px;
     border: 1px solid ${INK.rule};
     color: ${INK.textMuted};
     flex-shrink: 0;
@@ -1955,12 +1965,11 @@ const CSS = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    align-self: center;
     gap: 5px;
     height: 34px;
     padding: 0 12px;
-    margin-inline-end: 8px;
-    border-radius: 999px;
+    margin: 0;
+    border-radius: 10px;
     border: 1px solid ${INK.rule};
     background: ${INK.pageRaised};
     color: ${INK.text};
@@ -1985,7 +1994,7 @@ const CSS = `
     align-items: center;
     gap: 8px;
   }
-  .chev { border: none; color: ${INK.textFaint}; margin-inline-end: 6px; }
+  .chev { border: none; color: ${INK.textFaint}; }
 
   .empty-state {
     padding: 28px 20px;
@@ -2459,18 +2468,61 @@ const CSS = `
 
   @media (max-width: 480px) {
     .header { padding: 10px 12px; gap: 8px; }
-    .brand { gap: 8px; }
-    .brand-title { font-size: 20px; }
-    .brand-email { font-size: 12px; }
+    .brand { gap: 8px; min-width: 0; }
+    .brand-mark { font-size: 18px; letter-spacing: 0.04em; }
+    .brand-email { font-size: 11px; }
     .brand-sync { font-size: 10px; }
     .sync-full, .login-full { display: none; }
     .sync-short, .login-short { display: inline; }
-    .btn-login { padding: 8px 11px; font-size: 12px; }
+    .btn-login { padding: 8px 10px; font-size: 12px; }
     .btn-add { width: 36px; height: 36px; }
+    .header-actions { gap: 6px; }
+    .totals, .totals.soft {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px 12px 4px;
+    }
+    .total-cell { padding: 12px 10px; min-width: 0; }
+    .total-value, .totals.soft .total-value {
+      font-size: 18px;
+      overflow-wrap: anywhere;
+    }
+    .index-list { padding: 8px 12px 88px !important; }
+    .index-row {
+      flex-direction: column;
+      align-items: stretch;
+      margin: 0 0 10px;
+      overflow: hidden;
+    }
+    .index-main { padding: 14px 14px 10px; }
+    .index-name { font-size: 15px; white-space: normal; }
+    .index-actions {
+      width: 100%;
+      padding: 0 14px 12px;
+      gap: 8px;
+      box-sizing: border-box;
+    }
+    .index-actions .chev { margin-inline-start: auto; }
     .record { padding: 16px 16px 28px; }
     .btn-primary span { display: none; }
     .wa-btn span { display: none; }
     .wa-btn { padding: 0 12px; }
+    .ai-fab { inset-inline-end: 14px; bottom: 16px; }
+  }
+
+  @media (max-width: 860px) and (min-width: 481px) {
+    .index-list { padding: 8px 14px 80px !important; }
+    .index-row {
+      flex-direction: column;
+      align-items: stretch;
+      margin: 0 0 10px;
+    }
+    .index-main { padding: 14px 14px 10px; }
+    .index-actions {
+      width: 100%;
+      padding: 0 14px 12px;
+    }
+    .index-actions .chev { margin-inline-start: auto; }
   }
 `;
 
