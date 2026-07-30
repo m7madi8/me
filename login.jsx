@@ -1,17 +1,34 @@
 import React, { useEffect, useState } from "react";
-import { loginWithGoogle, completeGoogleRedirect, isFirebaseConfigured } from "./auth.js";
+import {
+  loginWithGoogle,
+  completeGoogleRedirect,
+  isFirebaseConfigured,
+  authErrorMessage,
+} from "./auth.js";
 import logoMe from "./img/logo-me.webp";
 
 /**
- * @param {{ onClose?: () => void, compact?: boolean }} props
+ * @param {{ onClose?: () => void, compact?: boolean, bootError?: string }} props
  */
-export default function LoginScreen({ onClose, compact = false } = {}) {
+export default function LoginScreen({ onClose, compact = false, bootError = "" } = {}) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(bootError || "");
+
+  useEffect(() => {
+    if (bootError) setError(bootError);
+  }, [bootError]);
 
   useEffect(() => {
     if (!isFirebaseConfigured()) return;
-    completeGoogleRedirect().catch(() => {});
+    let alive = true;
+    (async () => {
+      const res = await completeGoogleRedirect();
+      if (!alive) return;
+      if (res.error) setError(authErrorMessage(res.error));
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   if (!isFirebaseConfigured()) {
@@ -19,10 +36,7 @@ export default function LoginScreen({ onClose, compact = false } = {}) {
       <div className={compact ? "login-modal-card" : "login-screen"} dir="rtl">
         <div className="login-card gpt">
           <img src={logoMe} alt="Mohammad" className="login-logo" />
-          <p className="login-sub">
-            إعدادات Firebase غير موجودة في هذا البناء.
-            تأكد من ملف `.env` ثم أعد البناء والنشر.
-          </p>
+          <p className="login-sub">إعدادات Firebase غير موجودة في هذا البناء.</p>
           {onClose && (
             <button type="button" className="btn-ghost" onClick={onClose} style={{ marginTop: 12 }}>
               إغلاق
@@ -38,12 +52,14 @@ export default function LoginScreen({ onClose, compact = false } = {}) {
     setBusy(true);
     try {
       await loginWithGoogle();
-      // Popup success: auth watcher closes modal. Redirect leaves the page.
+      // Redirect flow leaves the page; popup success is handled by auth watcher.
     } catch (err) {
-      setError(friendlyError(err));
+      setError(authErrorMessage(err));
       setBusy(false);
     }
   }
+
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
 
   const card = (
     <div className="login-card gpt fade-in">
@@ -55,17 +71,19 @@ export default function LoginScreen({ onClose, compact = false } = {}) {
       <img src={logoMe} alt="Mohammad" className="login-logo" />
       <p className="login-one-line">تسجيل الدخول بـ Google</p>
       <p className="login-sub" style={{ marginTop: -8 }}>
-        يُحفظ دخولك على هذا الجهاز دائمًا، وتُزامَن بياناتك بين أجهزتك.
+        يُحفظ دخولك دائمًا وتُزامَن بياناتك بين أجهزتك.
       </p>
 
       {error && <div className="ai-error" style={{ marginBottom: 14, textAlign: "right" }}>{error}</div>}
 
       <button type="button" className="btn-google" onClick={handleGoogle} disabled={busy}>
         <GoogleIcon />
-        {busy ? "جارٍ الفتح…" : "تسجيل الدخول مع Google"}
+        {busy ? "جارٍ التحويل إلى Google…" : "تسجيل الدخول مع Google"}
       </button>
 
-      <p className="login-persist-note">الجلسة تبقى محفوظة حتى تسجّل الخروج.</p>
+      <p className="login-persist-note">
+        إذا فشل الدخول: أضف النطاق <strong>{host}</strong> في Firebase → Authorized domains
+      </p>
     </div>
   );
 
@@ -93,14 +111,4 @@ function GoogleIcon() {
       <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.1-3.5 5.5-6.5 6.9l.1.1 6.2 5.2C36.9 41.4 44 36 44 24c0-1.3-.1-2.5-.4-3.5z" />
     </svg>
   );
-}
-
-function friendlyError(err) {
-  const code = err?.code || "";
-  if (code.includes("popup-closed-by-user")) return "أُغلق نافذة Google قبل إكمال الدخول";
-  if (code.includes("unauthorized-domain")) return "أضف نطاق الموقع في Firebase → Authentication → Settings → Authorized domains";
-  if (code.includes("operation-not-allowed")) return "فعّل Google من Firebase → Authentication → Sign-in method";
-  if (code.includes("network-request-failed")) return "تحقق من الاتصال بالإنترنت";
-  if (code.includes("account-exists-with-different-credential")) return "هذا الإيميل مرتبط بطريقة دخول أخرى";
-  return err?.message || "حدث خطأ أثناء الدخول عبر Google";
 }

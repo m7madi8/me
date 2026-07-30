@@ -13,6 +13,8 @@ import {
   saveCloudLedger,
   mergeLedger,
   syncErrorMessage,
+  startAuthBoot,
+  authErrorMessage,
 } from "./auth.js";
 
 if (!window.storage) {
@@ -169,6 +171,7 @@ export default function MHLedger() {
   const [loaded, setLoaded] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [authBootError, setAuthBootError] = useState("");
   const [projects, setProjects] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [showNewForm, setShowNewForm] = useState(false);
@@ -196,10 +199,19 @@ export default function MHLedger() {
       setUser(null);
       return;
     }
+
+    startAuthBoot((err) => {
+      setAuthBootError(authErrorMessage(err));
+      setShowLogin(true);
+    }).catch(() => {});
+
     return watchAuth((u) => {
       setUser(u);
       setAuthReady(true);
-      if (u) setShowLogin(false);
+      if (u) {
+        setShowLogin(false);
+        setAuthBootError("");
+      }
       if (!u) {
         firstLoad.current = true;
       }
@@ -558,7 +570,13 @@ export default function MHLedger() {
         </button>
       )}
 
-      {showLogin && <LoginScreen compact onClose={() => setShowLogin(false)} />}
+      {showLogin && (
+        <LoginScreen
+          compact
+          bootError={authBootError}
+          onClose={() => setShowLogin(false)}
+        />
+      )}
 
       {aiOpen && (
         <div className="ai-drawer-backdrop" onClick={() => setAiOpen(false)}>

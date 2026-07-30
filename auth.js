@@ -1,5 +1,6 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import {
+  initializeAuth,
   getAuth,
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -7,8 +8,8 @@ import {
   signInWithRedirect,
   getRedirectResult,
   signOut,
-  setPersistence,
   browserLocalPersistence,
+  browserPopupRedirectResolver,
 } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
@@ -32,6 +33,8 @@ const firebaseConfig = {
 };
 
 const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope("email");
+googleProvider.addScope("profile");
 
 export function isFirebaseConfigured() {
   return Boolean(
@@ -42,28 +45,38 @@ export function isFirebaseConfigured() {
   );
 }
 
+function isHostedPage() {
+  const host = window.location.hostname;
+  return !(host === "localhost" || host === "127.0.0.1");
+}
+
 let app = null;
 let auth = null;
 let db = null;
-let persistenceReady = null;
+let bootPromise = null;
 
 function ensureFirebase() {
   if (!isFirebaseConfigured()) {
-    throw new Error("Firebase غير مضبوط. أضف مفاتيح المشروع في ملف .env");
+    throw new Error("Firebase غير مضبوط");
   }
   if (!app) {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
+    app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    try {
+      auth = initializeAuth(app, {
+        persistence: browserLocalPersistence,
+        popupRedirectResolver: browserPopupRedirectResolver,
+      });
+    } catch (_) {
+      // Already initialized in this page session
+      auth = getAuth(app);
+    }
     db = getFirestore(app);
-    // Keep the user signed in across browser restarts on this device.
-    persistenceReady = setPersistence(auth, browserLocalPersistence).catch(() => {});
   }
-  return { auth, db, persistenceReady };
+  return { auth, db };
 }
 
 async function readyAuth() {
   const ctx = ensureFirebase();
-  if (ctx.persistenceReady) await ctx.persistenceReady;
   return ctx.auth;
 }
 
@@ -72,42 +85,51 @@ export function watchAuth(callback) {
     callback(null);
     return () => {};
   }
-  const { auth, persistenceReady } = ensureFirebase();
-  let unsub = () => {};
-  Promise.resolve(persistenceReady).finally(() => {
-    unsub = onAuthStateChanged(auth, callback);
-  });
-  return () => unsub();
+  const { auth } = ensureFirebase();
+  return onAuthStateChanged(auth, callback);
 }
 
-/** Finish Google redirect flow (needed on phones). */
+/**
+ * Must run once on app boot (not only inside the login modal),
+ * otherwise redirect login never finishes after returning from Google.
+ */
 export async function completeGoogleRedirect() {
-  if (!isFirebaseConfigured()) return null;
-  await readyAuth();
-  const { auth } = ensureFirebase();
+  if (!isFirebaseConfigured()) return { user: null, error: null };
+  const auth = await readyAuth();
   try {
     const result = await getRedirectResult(auth);
-    return result?.user || null;
-  } catch (_) {
-    return null;
+    return { user: result?.user || null, error: null };
+  } catch (err) {
+    return { user: null, error: err };
   }
+}
+
+export function startAuthBoot(onError) {
+  if (bootPromise) return bootPromise;
+  bootPromise = completeGoogleRedirect().then((res) => {
+    if (res.error && typeof onError === "function") onError(res.error);
+    return res;
+  });
+  return bootPromise;
 }
 
 export async function loginWithGoogle() {
   const auth = await readyAuth();
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
+
+  // Hosted (Vercel/phone): redirect is far more reliable than popups.
+  if (isHostedPage()) {
     await signInWithRedirect(auth, googleProvider);
     return null;
   }
+
   try {
     const cred = await signInWithPopup(auth, googleProvider);
     return cred.user;
   } catch (err) {
     if (
       err?.code === "auth/popup-blocked" ||
-      err?.code === "auth/popup-closed-by-user" ||
-      err?.code === "auth/cancelled-popup-request"
+      err?.code === "auth/cancelled-popup-request" ||
+      err?.code === "auth/popup-closed-by-user"
     ) {
       await signInWithRedirect(auth, googleProvider);
       return null;
@@ -172,4 +194,28 @@ export function syncErrorMessage(err) {
     return "لا اتصال — البيانات محفوظة على الجهاز مؤقتًا.";
   }
   return err?.message || "فشلت المزامنة السحابية";
+}
+
+export function authErrorMessage(err) {
+  const code = String(err?.code || "");
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  if (code.includes("unauthorized-domain")) {
+    return `النطاق غير مصرّح: أضف «${host}» في Firebase → Authentication → Settings → Authorized domains`;
+  }
+  if (code.includes("operation-not-allowed")) {
+    return "فعّل Google من Firebase → Authentication → Sign-in method → Google → Enable";
+  }
+  if (code.includes("popup-closed-by-user") || code.includes("cancelled-popup-request")) {
+    return "أُغلق نافذة Google قبل إكمال الدخول — حاول مرة أخرى";
+  }
+  if (code.includes("popup-blocked")) {
+    return "المتصفح منع النافذة المنبثقة — سيتم التحويل لصفحة Google";
+  }
+  if (code.includes("network-request-failed")) {
+    return "تحقق من الاتصال بالإنترنت";
+  }
+  if (code.includes("account-exists-with-different-credential")) {
+    return "هذا الإيميل مرتبط بطريقة دخول أخرى";
+  }
+  return err?.message || "حدث خطأ أثناء الدخول عبر Google";
 }
