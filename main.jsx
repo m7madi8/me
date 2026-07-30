@@ -5,6 +5,7 @@ import { ensureLocalAI, OWNER } from "./ai-service.js";
 import AIAdvisorPage from "./ai-panel.jsx";
 import LoginScreen from "./login.jsx";
 import logoMe from "./img/logo-me.webp";
+import "./theme-brutal.css";
 import {
   isFirebaseConfigured,
   watchAuth,
@@ -37,27 +38,27 @@ const LOCAL_KEY = "mh-tracker-data";
 ========================================================= */
 
 const INK = {
-  bg: "#212121",
-  page: "#212121",
-  pageRaised: "#2f2f2f",
-  hover: "#2a2a2a",
-  rule: "#3a3a3a",
-  ruleFaint: "#2f2f2f",
-  text: "#ececec",
-  textMuted: "#b4b4b4",
-  textFaint: "#8e8e8e",
-  white: "#ffffff",
-  accent: "#ececec",
-  sidebar: "#171717",
-  composer: "#303030",
+  bg: "#050505",
+  page: "#0a0a0a",
+  pageRaised: "#121212",
+  hover: "#101010",
+  rule: "#242424",
+  ruleFaint: "#1a1a1a",
+  text: "#f2efe6",
+  textMuted: "#9a958c",
+  textFaint: "#5c584f",
+  white: "#f2efe6",
+  accent: "#ff2d1a",
+  sidebar: "#070707",
+  composer: "#0a0a0a",
 };
 
 const STATUS = {
-  proposed: { label: "Proposed", fg: "#9B9B97", bg: "transparent", border: "#3A3A38", dashed: true },
-  in_progress: { label: "In Progress", fg: "#F0F0EE", bg: "transparent", border: "#F0F0EE", dashed: true },
-  review: { label: "In Review", fg: "#070707", bg: "#B8B8B3", border: "#B8B8B3", dashed: false },
-  delivered: { label: "Delivered", fg: "#070707", bg: "#E8E8E4", border: "#E8E8E4", dashed: false },
-  settled: { label: "Settled", fg: "#6A6A66", bg: "transparent", border: "#2A2A2A", dashed: false },
+  proposed: { label: "Proposed", fg: "#9a958c", bg: "transparent", border: "#5c584f", dashed: true },
+  in_progress: { label: "In Progress", fg: "#f2efe6", bg: "transparent", border: "#ff2d1a", dashed: false },
+  review: { label: "In Review", fg: "#050505", bg: "#f2efe6", border: "#f2efe6", dashed: false },
+  delivered: { label: "Delivered", fg: "#050505", bg: "#ff2d1a", border: "#ff2d1a", dashed: false },
+  settled: { label: "Settled", fg: "#5c584f", bg: "transparent", border: "#242424", dashed: false },
 };
 const STATUS_ORDER = ["proposed", "in_progress", "review", "delivered", "settled"];
 const CURRENCIES = ["$", "\u20AA", "JOD"];
@@ -406,8 +407,9 @@ export default function MHLedger() {
       <div className="app-frame fade-in">
         <header className="header">
           <div className="brand">
-            <Logo height={28} />
+            <Logo height={40} />
             <div className="brand-meta">
+              <div className="brand-mark">MOHAMMAD</div>
               {user ? (
                 <>
                   <div className="brand-email" title={user.email}>{user.email}</div>
@@ -529,10 +531,10 @@ export default function MHLedger() {
 
           <main className={`record-pane ${showRecord ? "is-visible" : "is-hidden"}`}>
             {!selected ? (
-              <div className="empty-record">
-                <Logo height={48} />
-                <p>اختر مشروعاً من القائمة</p>
-              </div>
+                <div className="empty-record">
+                  <Logo height={56} />
+                  <p>اختر مشروعًا</p>
+                </div>
             ) : (
               <RecordPage
                 project={selected}
@@ -1023,9 +1025,9 @@ function NewEntryModal({ onClose, onCreate }) {
 
 const CSS = `
   :root {
-    --font-display: "Segoe UI", system-ui, -apple-system, sans-serif;
-    --font-body: "Segoe UI", system-ui, -apple-system, sans-serif;
-    --font-mono: ui-monospace, Consolas, monospace;
+    --font-display: "Anton", "Arial Black", Impact, sans-serif;
+    --font-body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+    --font-mono: "Syne", "Arial Black", sans-serif;
   }
 
   *, *::before, *::after { box-sizing: border-box; }
@@ -1056,7 +1058,7 @@ const CSS = `
   }
 
   .app-frame {
-    max-width: 1100px;
+    max-width: 1180px;
     margin: 0 auto;
     min-height: 100vh;
     display: flex;
@@ -1081,16 +1083,17 @@ const CSS = `
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 12px 14px;
+    padding: 0;
     border-bottom: 1px solid ${INK.ruleFaint};
     background: ${INK.sidebar};
   }
   .brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     min-width: 0;
     flex: 1;
+    padding: 10px 14px;
   }
   .brand-meta {
     min-width: 0;
@@ -1098,6 +1101,13 @@ const CSS = `
     flex-direction: column;
     gap: 2px;
     overflow: hidden;
+  }
+  .brand-mark {
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: 0.04em;
+    line-height: 0.9;
+    color: ${INK.text};
   }
   .brand-email {
     font-size: 13px;
@@ -1114,52 +1124,13 @@ const CSS = `
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .brand-sync.is-bad { color: #e8a0a0; }
+  .brand-sync.is-bad { color: ${INK.accent}; }
   .sync-short, .login-short { display: none; }
   .brand-logo {
     flex-shrink: 0;
     width: auto;
     object-fit: contain;
     display: block;
-  }
-  .brand-title {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: 17px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1.1;
-  }
-  .brand-sub {
-    margin: 3px 0 0;
-    font-family: var(--font-body);
-    font-size: 12px;
-    color: ${INK.textFaint};
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .ai-pill {
-    font-family: var(--font-body);
-    font-size: 11px;
-    color: ${INK.textMuted};
-    border: 1px solid ${INK.rule};
-    border-radius: 999px;
-    padding: 3px 10px;
-    background: ${INK.pageRaised};
-  }
-  .seal {
-    flex-shrink: 0;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #151515;
-    border: 1px solid ${INK.rule};
-    font-family: var(--font-display);
-    font-weight: 600;
-    color: ${INK.text};
   }
 
   .login-screen {
