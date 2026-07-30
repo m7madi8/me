@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { loginWithGoogle, completeGoogleRedirect, isFirebaseConfigured } from "./auth.js";
+import logoMe from "./img/logo-me.webp";
 
 export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
@@ -13,18 +14,9 @@ export default function LoginScreen() {
   if (!isFirebaseConfigured()) {
     return (
       <div className="login-screen" dir="rtl">
-        <div className="login-card">
-          <div className="login-seal">M</div>
-          <h1>Mohammad</h1>
-          <p className="login-sub">
-            لتسجيل الدخول عبر Google والمزامنة بين الأجهزة، أضف إعدادات Firebase في ملف `.env` ثم أعد تشغيل الموقع.
-          </p>
-          <pre className="login-steps">{`VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...`}</pre>
+        <div className="login-card gpt">
+          <img src={logoMe} alt="Mohammad" className="login-logo" />
+          <p className="login-sub">أضف إعدادات Firebase في `.env` ثم أعد التشغيل.</p>
         </div>
       </div>
     );
@@ -43,28 +35,16 @@ VITE_FIREBASE_APP_ID=...`}</pre>
 
   return (
     <div className="login-screen" dir="rtl">
-      <div className="login-card fade-in">
-        <div className="login-seal">M</div>
-        <h1>Mohammad</h1>
-        <p className="login-sub">
-          ادخل بحساب Google — سجلك يتزامن تلقائيًا بين اللابتوب والتلفون
-        </p>
+      <div className="login-card gpt fade-in">
+        <img src={logoMe} alt="Mohammad" className="login-logo" />
+        <p className="login-one-line">سجّل الدخول للمتابعة</p>
 
         {error && <div className="ai-error" style={{ marginBottom: 14, textAlign: "right" }}>{error}</div>}
 
-        <button
-          type="button"
-          className="btn-google"
-          onClick={handleGoogle}
-          disabled={busy}
-        >
+        <button type="button" className="btn-google" onClick={handleGoogle} disabled={busy}>
           <GoogleIcon />
-          {busy ? "جارٍ فتح Google…" : "المتابعة مع Google"}
+          {busy ? "جارٍ الفتح…" : "المتابعة مع Google"}
         </button>
-
-        <p className="login-hint">
-          فعّل Google في Firebase Authentication، وأضف نطاق موقعك في Authorized domains.
-        </p>
       </div>
     </div>
   );
@@ -84,8 +64,8 @@ function GoogleIcon() {
 function friendlyError(err) {
   const code = err?.code || "";
   if (code.includes("popup-closed-by-user")) return "أُغلق نافذة Google قبل إكمال الدخول";
-  if (code.includes("unauthorized-domain")) return "أضف نطاق الموقع في Firebase → Authentication → Settings → Authorized domains";
-  if (code.includes("operation-not-allowed")) return "فعّل Google في Firebase → Authentication → Sign-in method";
+  if (code.includes("unauthorized-domain")) return "أضف نطاق الموقع في Firebase → Authorized domains";
+  if (code.includes("operation-not-allowed")) return "فعّل Google في Firebase → Sign-in method";
   if (code.includes("network-request-failed")) return "تحقق من الاتصال بالإنترنت";
   if (code.includes("account-exists-with-different-credential")) return "هذا الإيميل مرتبط بطريقة دخول أخرى";
   return err?.message || "حدث خطأ أثناء الدخول عبر Google";

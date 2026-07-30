@@ -3,9 +3,9 @@
  * Runs fully offline via Ollama + Qwen3 on this machine.
  */
 
-const OLLAMA_BASE = "/ollama"; // Vite proxy → http://127.0.0.1:11434
 const DEFAULT_MODEL = "qwen3";
 const MODEL_KEY = "mohammad-ollama-model";
+const BASE_KEY = "mohammad-ollama-base";
 
 const OWNER = {
   name: "mohammad",
@@ -22,6 +22,35 @@ const STATUS_AR = {
   delivered: "تم التسليم",
   settled: "تمت التسوية",
 };
+
+/** Prefer Vite proxy in dev; direct localhost works from hosted site on same PC. */
+function ollamaCandidates() {
+  const saved = localStorage.getItem(BASE_KEY);
+  const list = [];
+  if (saved) list.push(saved);
+  const host = window.location.hostname;
+  const isLocalHost = host === "localhost" || host === "127.0.0.1";
+  if (isLocalHost) list.push("/ollama");
+  list.push("http://127.0.0.1:11434", "http://localhost:11434");
+  return [...new Set(list)];
+}
+
+async function fetchOllama(path, options) {
+  let lastErr = null;
+  for (const base of ollamaCandidates()) {
+    try {
+      const res = await fetch(`${base}${path}`, options);
+      if (res.ok || res.status < 500) {
+        localStorage.setItem(BASE_KEY, base);
+        return res;
+      }
+      lastErr = new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("Ollama unreachable");
+}
 
 export function getModel() {
   return localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
@@ -53,7 +82,7 @@ export async function ensureLocalAI() {
 
 export async function pingOllama() {
   try {
-    const res = await fetch(`${OLLAMA_BASE}/api/tags`, { method: "GET" });
+    const res = await fetchOllama("/api/tags", { method: "GET" });
     if (!res.ok) {
       return { ok: false, message: "Ollama يعمل لكن الرد غير سليم. تأكد أن الخدمة شغّالة." };
     }
@@ -67,17 +96,20 @@ export async function pingOllama() {
       return {
         ok: false,
         models,
-        message: `Ollama متصل، لكن النموذج «${wanted}» غير محمّل. نفّذ مرة واحدة (يحتاج نت temporarily):\nollama pull ${wanted}`,
+        message: `Ollama متصل، لكن النموذج «${wanted}» غير محمّل. نفّذ:\nollama pull ${wanted}`,
       };
     }
     localStorage.setItem("mohammad-ollama-ready", "1");
-    return { ok: true, models, message: `جاهز محليًا — ${wanted}` };
+    const base = localStorage.getItem(BASE_KEY) || "local";
+    return { ok: true, models, message: `جاهز محليًا — ${wanted}\n(${base})` };
   } catch (_) {
+    const hosted = !["localhost", "127.0.0.1"].includes(window.location.hostname);
     return {
       ok: false,
       models: [],
-      message:
-        "Ollama غير متصل على هذا الجهاز. ثبّته وشغّله محليًا ثم:\nollama pull qwen3",
+      message: hosted
+        ? "من الرابط المنشور: شغّل Ollama على هذا الجهاز، ثم في PowerShell مرة واحدة:\nsetx OLLAMA_ORIGINS \"*\"\nوأعد تشغيل Ollama، ثم اضغط فحص الاتصال."
+        : "Ollama غير متصل. شغّله محليًا ثم:\nollama pull qwen3",
     };
   }
 }
@@ -228,7 +260,7 @@ async function callLocal(messages, { temperature = 0.35, maxTokens = 1400 } = {}
   const model = getModel();
   let res;
   try {
-    res = await fetch(`${OLLAMA_BASE}/api/chat`, {
+    res = await fetchOllama("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

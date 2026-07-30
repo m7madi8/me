@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Brain, MessageSquare, Settings, Sparkles, RefreshCw, Copy, Check } from "lucide-react";
+import { Brain, MessageSquare, Settings, Sparkles, RefreshCw, Copy, Check, ArrowUp } from "lucide-react";
 import {
   analyzeBusinessPerformance,
   getProjectRecommendations,
@@ -12,9 +12,10 @@ import {
   DEFAULT_MODEL,
   OWNER,
 } from "./ai-service.js";
+import logoMe from "./img/logo-me.webp";
 
 /**
- * Dedicated local AI workspace for mohammad (Ollama + Qwen3).
+ * ChatGPT-style local advisor (Ollama + Qwen3).
  */
 export default function AIAdvisorPage({
   projects,
@@ -40,6 +41,7 @@ export default function AIAdvisorPage({
   const [error, setError] = useState("");
   const chatEndRef = useRef(null);
   const briefOnce = useRef(false);
+  const inputRef = useRef(null);
 
   const selected = projects.find((p) => p.id === selectedId) || null;
 
@@ -68,7 +70,7 @@ export default function AIAdvisorPage({
   function requireLocal() {
     if (!aiReady) {
       setTab("settings");
-      setError("Qwen3 المحلي غير جاهز. ثبّت Ollama وسحب النموذج ثم اضغط «فحص الاتصال».");
+      setError("Qwen3 غير جاهز. ثبّت Ollama ثم افحص الاتصال.");
       return false;
     }
     setError("");
@@ -99,16 +101,10 @@ export default function AIAdvisorPage({
   }
 
   async function runProjectAdvice() {
-    if (!requireLocal()) return;
-    if (!selected) {
-      setError("اختر مشروعًا من القائمة أولًا.");
-      return;
-    }
+    if (!requireLocal() || !selected) return;
     setLoading(true);
-    setTab("project");
-    setError("");
     try {
-      setProjectAdvice(await getProjectRecommendations(selected, currency, projects, userName));
+      setProjectAdvice(await getProjectRecommendations(selected, currency, userName));
     } catch (e) {
       setProjectAdvice(`حدث خطأ: ${e.message}`);
     }
@@ -118,35 +114,39 @@ export default function AIAdvisorPage({
   async function runWaDraft() {
     if (!requireLocal() || !selected) return;
     setLoading(true);
-    setTab("project");
     try {
-      setWaDraft(await draftWhatsAppFollowUp(selected, currency, userName));
+      setWaDraft(await draftWhatsAppFollowUp(selected, userName));
     } catch (e) {
       setWaDraft(`حدث خطأ: ${e.message}`);
     }
     setLoading(false);
   }
 
-  async function sendChat(preset) {
-    const text = (preset || chatInput).trim();
-    if (!text || !requireLocal()) return;
+  async function sendChat(text) {
+    const q = (typeof text === "string" ? text : chatInput).trim();
+    if (!q || loading) return;
+    if (!requireLocal()) return;
+
     const history = chatMessages;
-    setChatMessages((prev) => [...prev, { role: "user", content: text }]);
     setChatInput("");
+    setChatMessages((m) => [...m, { role: "user", content: q }]);
     setLoading(true);
     try {
-      const reply = await chatWithAI(projects, currency, userName, text, history, selected);
-      setChatMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      const reply = await chatWithAI(projects, currency, userName, q, history, selected);
+      setChatMessages((m) => [...m, { role: "assistant", content: reply }]);
     } catch (e) {
-      setChatMessages((prev) => [...prev, { role: "assistant", content: `حدث خطأ: ${e.message}` }]);
+      setChatMessages((m) => [...m, { role: "assistant", content: `تعذّر الرد: ${e.message}` }]);
     }
     setLoading(false);
+    inputRef.current?.focus();
   }
 
   async function saveSettings() {
     setModel(modelName.trim() || DEFAULT_MODEL);
     setModelName(getModel());
+    setLoading(true);
     const status = await refreshStatus();
+    setLoading(false);
     if (status.ok) {
       setError("");
       setTab("chat");
@@ -170,63 +170,45 @@ export default function AIAdvisorPage({
     selected ? `كيف أمشي بمشروع ${selected.name || "المفتوح"}؟` : null,
   ].filter(Boolean);
 
-  return (
-    <div className="ai-page fade-in" dir="rtl">
-      <header className="ai-hero">
-        <div>
-          <div className="ai-kicker">
-            <Sparkles size={14} />
-            محلي بالكامل — Ollama / Qwen3
-          </div>
-          <h2 className="ai-title">مستشار Mohammad</h2>
-          <p className="ai-sub">
-            مخصّص لـ {userName} فقط. يعمل على جهازك بدون إنترنت ويقرأ سجل Mohammad.
-          </p>
-        </div>
-        <div className="ai-stats">
-          <div>
-            <span>المشاريع</span>
-            <strong>{projects.length}</strong>
-          </div>
-          <div>
-            <span>الحالة</span>
-            <strong>{aiReady ? "محلي جاهز" : "غير متصل"}</strong>
-          </div>
-        </div>
-      </header>
+  const tools = [
+    { id: "chat", icon: MessageSquare, title: "محادثة" },
+    { id: "briefing", icon: Sparkles, title: "إحاطة" },
+    { id: "analysis", icon: Brain, title: "تحليل" },
+    { id: "project", icon: MessageSquare, title: "مشروع" },
+    { id: "settings", icon: Settings, title: "إعدادات" },
+  ];
 
-      <nav className="ai-tabs" aria-label="أقسام المستشار">
-        {[
-          { id: "chat", label: "محادثة", icon: MessageSquare },
-          { id: "briefing", label: "إحاطة", icon: Sparkles },
-          { id: "analysis", label: "تحليل", icon: Brain },
-          { id: "project", label: "مشروع", icon: MessageSquare },
-          { id: "settings", label: "محلي", icon: Settings },
-        ].map(({ id, label, icon: Icon }) => (
+  return (
+    <div className="ai-page gpt-chat fade-in" dir="rtl">
+      <nav className="ai-rail" aria-label="أدوات">
+        {tools.map(({ id, icon: Icon, title }) => (
           <button
             key={id}
             type="button"
-            className={`ai-tab ${tab === id ? "is-active" : ""}`}
+            className={`ai-rail-btn ${tab === id ? "is-active" : ""}`}
             onClick={() => setTab(id)}
+            title={title}
+            aria-label={title}
           >
-            <Icon size={14} />
-            {label}
+            <Icon size={18} />
           </button>
         ))}
+        <span className={`ai-dot ${aiReady ? "on" : ""}`} title={aiReady ? "محلي جاهز" : "غير متصل"} />
       </nav>
 
-      {error && <div className="ai-error">{error}</div>}
+      {error && <div className="ai-error soft">{error}</div>}
 
       <div className="ai-body-wrap">
         {tab === "chat" && (
-          <section className="ai-panel chat-panel">
+          <section className="ai-panel chat-panel gpt">
             <div className="ai-panel-scroll mh-scroll">
               {chatMessages.length === 0 && (
-                <div className="chat-empty">
-                  <p className="chat-hint">ابدأ بسؤال مباشر. المستشار يعرف إدخالات سجلك محليًا.</p>
+                <div className="chat-empty gpt">
+                  <img src={logoMe} alt="" className="chat-empty-logo" />
+                  <h2>كيف أقدر أساعدك؟</h2>
                   <div className="chip-row">
                     {chips.map((q) => (
-                      <button key={q} type="button" className="chip" onClick={() => sendChat(q)} disabled={loading}>
+                      <button key={q} type="button" className="chip soft" onClick={() => sendChat(q)} disabled={loading}>
                         {q}
                       </button>
                     ))}
@@ -234,88 +216,96 @@ export default function AIAdvisorPage({
                 </div>
               )}
               {chatMessages.map((msg, i) => (
-                <div key={i} className={`chat-bubble ${msg.role === "user" ? "is-user" : "is-ai"}`}>
-                  <div className="chat-role">{msg.role === "user" ? "أنت" : "مستشار Mohammad"}</div>
-                  <div className="chat-text">{msg.content}</div>
+                <div key={i} className={`chat-row ${msg.role === "user" ? "is-user" : "is-ai"}`}>
+                  {msg.role !== "user" && (
+                    <img src={logoMe} alt="" className="chat-avatar" />
+                  )}
+                  <div className={`chat-bubble gpt ${msg.role === "user" ? "is-user" : "is-ai"}`}>
+                    <div className="chat-text">{msg.content}</div>
+                  </div>
                 </div>
               ))}
               {loading && (
-                <div className="loading-line">
-                  <Sparkles size={16} className="spin" />
-                  <span>Qwen3 يكتب محليًا…</span>
+                <div className="chat-row is-ai">
+                  <img src={logoMe} alt="" className="chat-avatar" />
+                  <div className="typing-dots" aria-label="يكتب">
+                    <span /><span /><span />
+                  </div>
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
-            <div className="chat-compose sticky-compose">
-              <input
-                className="field-input"
-                placeholder="اكتب لمستشارك…"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendChat()}
-              />
-              <button className="btn-primary" type="button" onClick={() => sendChat()} disabled={loading}>
-                إرسال
-              </button>
+
+            <div className="chat-compose gpt sticky-compose">
+              <div className="composer">
+                <textarea
+                  ref={inputRef}
+                  className="composer-input"
+                  rows={1}
+                  placeholder="اكتب رسالة…"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendChat();
+                    }
+                  }}
+                />
+                <button
+                  className="composer-send"
+                  type="button"
+                  onClick={() => sendChat()}
+                  disabled={loading || !chatInput.trim()}
+                  aria-label="إرسال"
+                >
+                  <ArrowUp size={18} strokeWidth={2.4} />
+                </button>
+              </div>
             </div>
           </section>
         )}
 
         {tab === "briefing" && (
-          <section className="ai-panel">
-            <div className="ai-panel-toolbar">
-              <h3>إحاطة اليوم</h3>
+          <section className="ai-panel soft-panel">
+            <div className="ai-panel-toolbar quiet">
               <button className="btn-ghost" type="button" onClick={refreshBriefing} disabled={loading}>
                 <RefreshCw size={14} />
-                {loading ? "يحدّث…" : "حدّث"}
+                {loading ? "…" : "حدّث"}
               </button>
             </div>
             {loading && !briefing ? (
-              <div className="loading-line">
-                <Sparkles size={16} className="spin" />
-                <span>يقرأ السجل محليًا…</span>
-              </div>
+              <div className="loading-line"><span>لحظة…</span></div>
             ) : (
-              <pre className="ai-prose">{briefing || "اضغط «حدّث» لجلب إحاطتك."}</pre>
+              <pre className="ai-prose">{briefing || "اضغط حدّث."}</pre>
             )}
           </section>
         )}
 
         {tab === "analysis" && (
-          <section className="ai-panel">
-            <div className="ai-panel-toolbar">
-              <h3>تحليل الأعمال</h3>
+          <section className="ai-panel soft-panel">
+            <div className="ai-panel-toolbar quiet">
               <button className="btn-primary" type="button" onClick={runAnalysis} disabled={loading}>
-                <Brain size={14} />
-                {loading ? "يحلّل…" : analysis ? "أعد التحليل" : "حلّل الآن"}
+                {loading ? "…" : analysis ? "أعد" : "حلّل"}
               </button>
             </div>
             {loading && !analysis ? (
-              <div className="loading-line">
-                <Sparkles size={16} className="spin" />
-                <span>Qwen3 يحلّل…</span>
-              </div>
+              <div className="loading-line"><span>لحظة…</span></div>
             ) : (
-              <pre className="ai-prose">{analysis || "شغّل التحليل لترى صورة كاملة عن أعمالك."}</pre>
+              <pre className="ai-prose">{analysis || "اضغط حلّل."}</pre>
             )}
           </section>
         )}
 
         {tab === "project" && (
-          <section className="ai-panel">
-            <div className="ai-panel-toolbar">
-              <h3>تركيز على مشروع</h3>
-            </div>
-
+          <section className="ai-panel soft-panel">
             <label className="field">
-              <span className="field-label">اختر مشروعًا</span>
               <select
                 className="field-input"
                 value={selectedId || ""}
                 onChange={(e) => setSelectedId(e.target.value || null)}
               >
-                <option value="">— اختر —</option>
+                <option value="">اختر مشروعاً</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {(p.name || "بدون عنوان") + (p.client ? ` — ${p.client}` : "")}
@@ -326,36 +316,21 @@ export default function AIAdvisorPage({
 
             <div className="ai-actions" style={{ marginTop: 12 }}>
               <button className="btn-ghost" type="button" onClick={runProjectAdvice} disabled={loading || !selected}>
-                <Brain size={14} /> توصيات المشروع
+                توصيات
               </button>
               <button className="btn-ghost" type="button" onClick={runWaDraft} disabled={loading || !selected}>
-                <MessageSquare size={14} /> مسودة واتساب
+                واتساب
               </button>
             </div>
 
-            {loading && (
-              <div className="loading-line" style={{ marginTop: 20 }}>
-                <Sparkles size={16} className="spin" />
-                <span>يعمل محليًا…</span>
-              </div>
-            )}
-
-            {projectAdvice && (
-              <div style={{ marginTop: 18 }}>
-                <div className="field-label" style={{ marginBottom: 8 }}>التوصيات</div>
-                <pre className="ai-prose">{projectAdvice}</pre>
-              </div>
-            )}
-
+            {loading && <div className="loading-line" style={{ marginTop: 20 }}><span>لحظة…</span></div>}
+            {projectAdvice && <pre className="ai-prose" style={{ marginTop: 16 }}>{projectAdvice}</pre>}
             {waDraft && (
-              <div style={{ marginTop: 18 }}>
-                <div className="ai-panel-toolbar">
-                  <div className="field-label">مسودة واتساب</div>
-                  <button className="btn-ghost" type="button" onClick={() => copyText(waDraft)}>
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                    {copied ? "تم النسخ" : "نسخ"}
-                  </button>
-                </div>
+              <div style={{ marginTop: 16 }}>
+                <button className="btn-ghost" type="button" onClick={() => copyText(waDraft)} style={{ marginBottom: 8 }}>
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? "تم" : "نسخ"}
+                </button>
                 <pre className="ai-prose">{waDraft}</pre>
               </div>
             )}
@@ -363,16 +338,8 @@ export default function AIAdvisorPage({
         )}
 
         {tab === "settings" && (
-          <section className="ai-panel form-stack">
-            <h3 style={{ margin: 0, fontFamily: "var(--font-display)", fontStyle: "italic" }}>
-              التشغيل المحلي
-            </h3>
-            <p className="field-hint" style={{ marginTop: 0 }}>
-              لا يوجد API سحابي. الذكاء الاصطناعي يعمل عبر Ollama على جهازك فقط.
-            </p>
-
+          <section className="ai-panel soft-panel form-stack">
             <label className="field">
-              <span className="field-label">اسمك</span>
               <input
                 className="field-input"
                 value={userName}
@@ -380,30 +347,17 @@ export default function AIAdvisorPage({
                 placeholder={OWNER.name}
               />
             </label>
-
             <label className="field">
-              <span className="field-label">نموذج Ollama</span>
               <input
                 className="field-input"
                 value={modelName}
                 onChange={(e) => setModelName(e.target.value)}
                 placeholder={DEFAULT_MODEL}
               />
-              <p className="field-hint">الافتراضي: qwen3 — بعد التثبيت مرة واحدة يعمل بدون نت.</p>
             </label>
-
-            <pre className="ai-prose" style={{ opacity: 0.85, fontSize: 13 }}>
-{`1) ثبّت Ollama من موقعه (مرة واحدة)
-2) في الطرفية:
-   ollama pull qwen3
-3) اترك Ollama شغالًا
-4) اضغط «فحص الاتصال»`}
-            </pre>
-
-            {statusMsg && <div className={`ai-error ${aiReady ? "is-ok" : ""}`}>{statusMsg}</div>}
-
+            {statusMsg && <div className={`ai-error soft ${aiReady ? "is-ok" : ""}`}>{statusMsg}</div>}
             <button className="btn-primary btn-block" type="button" onClick={saveSettings}>
-              فحص الاتصال وحفظ
+              فحص الاتصال
             </button>
           </section>
         )}

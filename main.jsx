@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { Plus, Trash2, X, Check, ChevronRight, Brain, LogOut } from "lucide-react";
+import { Plus, Trash2, X, Check, ChevronRight, LogOut } from "lucide-react";
 import { ensureLocalAI, OWNER } from "./ai-service.js";
 import AIAdvisorPage from "./ai-panel.jsx";
 import LoginScreen from "./login.jsx";
+import logoMe from "./img/logo-me.webp";
 import {
   isFirebaseConfigured,
   watchAuth,
@@ -33,17 +34,19 @@ const LOCAL_KEY = "mh-tracker-data";
 ========================================================= */
 
 const INK = {
-  bg: "#070707",
-  page: "#111111",
-  pageRaised: "#1A1A1A",
-  hover: "#161616",
-  rule: "#2A2A2A",
-  ruleFaint: "#1C1C1C",
-  text: "#F0F0EE",
-  textMuted: "#9B9B97",
-  textFaint: "#5E5E5A",
-  white: "#F0F0EE",
-  accent: "#E8E8E4",
+  bg: "#212121",
+  page: "#212121",
+  pageRaised: "#2f2f2f",
+  hover: "#2a2a2a",
+  rule: "#3a3a3a",
+  ruleFaint: "#2f2f2f",
+  text: "#ececec",
+  textMuted: "#b4b4b4",
+  textFaint: "#8e8e8e",
+  white: "#ffffff",
+  accent: "#ececec",
+  sidebar: "#171717",
+  composer: "#303030",
 };
 
 const STATUS = {
@@ -95,7 +98,7 @@ export default function MHLedger() {
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured());
   const [user, setUser] = useState(null);
   const [loaded, setLoaded] = useState(false);
-  const [view, setView] = useState("ledger"); // ledger | ai
+  const [aiOpen, setAiOpen] = useState(false);
   const [projects, setProjects] = useState([]);
   const [currency, setCurrency] = useState("$");
   const [selectedId, setSelectedId] = useState(null);
@@ -207,7 +210,7 @@ export default function MHLedger() {
     await logout();
     setProjects([]);
     setSelectedId(null);
-    setView("ledger");
+    setAiOpen(false);
   }
 
   const selected = projects.find((p) => p.id === selectedId) || null;
@@ -255,10 +258,8 @@ export default function MHLedger() {
   if (!authReady) {
     return (
       <Shell>
-        <div className="app-frame flex items-center justify-center" style={{ minHeight: "100vh" }}>
-          <p className="fade-in" style={{ fontFamily: "var(--font-body)", color: INK.textFaint, fontSize: 14, fontStyle: "italic" }}>
-            Opening Mohammad…
-          </p>
+        <div className="boot-screen fade-in">
+          <img src={logoMe} alt="Mohammad" className="boot-logo" />
         </div>
       </Shell>
     );
@@ -275,10 +276,8 @@ export default function MHLedger() {
   if (!loaded) {
     return (
       <Shell>
-        <div className="app-frame flex items-center justify-center" style={{ minHeight: "100vh" }}>
-          <p className="fade-in" style={{ fontFamily: "var(--font-body)", color: INK.textFaint, fontSize: 14, fontStyle: "italic" }}>
-            جارٍ مزامنة سجلك…
-          </p>
+        <div className="boot-screen fade-in">
+          <img src={logoMe} alt="Mohammad" className="boot-logo" />
         </div>
       </Shell>
     );
@@ -289,36 +288,12 @@ export default function MHLedger() {
       <div className="app-frame fade-in">
         <header className="header">
           <div className="brand">
-            <Seal />
-            <div>
-              <h1 className="brand-title">{view === "ai" ? "مستشار Mohammad" : "Mohammad"}</h1>
-              <p className="brand-sub">
-                {user ? user.email : "سجل أعمال"}
-                {syncLabel && <span className="ai-pill">{syncLabel}</span>}
-              </p>
-            </div>
+            <Logo height={34} />
+            {syncLabel && <span className="ai-pill">{syncLabel}</span>}
           </div>
 
           <div className="header-actions">
-            {saveError && <span className="save-error">Save failed</span>}
-
-            <nav className="view-switch" aria-label="التنقل">
-              <button
-                type="button"
-                className={`view-btn ${view === "ledger" ? "is-active" : ""}`}
-                onClick={() => setView("ledger")}
-              >
-                السجل
-              </button>
-              <button
-                type="button"
-                className={`view-btn ${view === "ai" ? "is-active" : ""}`}
-                onClick={() => setView("ai")}
-              >
-                <Brain size={14} />
-                مستشار
-              </button>
-            </nav>
+            {saveError && <span className="save-error">فشل الحفظ</span>}
 
             {user && (
               <IconBtn title="تسجيل الخروج" onClick={handleLogout}>
@@ -326,138 +301,148 @@ export default function MHLedger() {
               </IconBtn>
             )}
 
-            {view === "ledger" && (
-              <>
-                <select
-                  className="currency-select"
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  aria-label="Currency"
-                >
-                  {CURRENCIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-                <button className="btn-primary" onClick={() => setShowNewForm(true)}>
-                  <Plus size={16} strokeWidth={2.2} />
-                  <span>New</span>
-                </button>
-              </>
-            )}
+            <select
+              className="currency-select"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              aria-label="العملة"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <button className="btn-primary" onClick={() => setShowNewForm(true)}>
+              <Plus size={16} strokeWidth={2.2} />
+            </button>
           </div>
         </header>
 
-        {view === "ai" ? (
-          <AIAdvisorPage
-            projects={projects}
-            currency={currency}
-            userName={userName}
-            setUserName={setUserName}
-            selectedId={selectedId}
-            setSelectedId={setSelectedId}
-            aiReady={aiReady}
-            setAiReady={setAiReady}
-          />
-        ) : (
-          <>
-            <section className="totals" aria-label="Ledger totals">
-              <TotalCell label="Contracted" value={`${fmt(totalContracted)} ${currency}`} />
-              <TotalCell label="Received" value={`${fmt(totalPaid)} ${currency}`} bright />
-              <TotalCell label="Outstanding" value={`${fmt(totalOutstanding)} ${currency}`} bright={totalOutstanding > 0} />
-              <TotalCell label="Net Profit" value={`${fmt(totalProfit)} ${currency}`} bright last />
-            </section>
+        <section className="totals soft" aria-label="ملخص">
+          <TotalCell label="متعاقد" value={`${fmt(totalContracted)} ${currency}`} />
+          <TotalCell label="مستلم" value={`${fmt(totalPaid)} ${currency}`} bright />
+          <TotalCell label="متبقي" value={`${fmt(totalOutstanding)} ${currency}`} bright={totalOutstanding > 0} />
+          <TotalCell label="صافي" value={`${fmt(totalProfit)} ${currency}`} bright last />
+        </section>
 
-            <div className="spread">
-              <aside className={`index-pane ${showIndex ? "is-visible" : "is-hidden"}`}>
-                <div className="pane-label">
-                  Index
-                  <span className="pane-count">{projects.length}</span>
+        <div className="spread">
+          <aside className={`index-pane ${showIndex ? "is-visible" : "is-hidden"}`}>
+            <div className="index-list mh-scroll">
+              {projects.length === 0 ? (
+                <div className="empty-state">
+                  <p>لا مشاريع بعد</p>
+                  <button className="btn-ghost" onClick={() => setShowNewForm(true)}>
+                    أضف مشروع
+                  </button>
                 </div>
-
-                <div className="index-list mh-scroll">
-                  {projects.length === 0 ? (
-                    <div className="empty-state">
-                      <p>No entries yet.</p>
-                      <button className="btn-ghost" onClick={() => setShowNewForm(true)}>
-                        Open a new entry
-                      </button>
-                    </div>
-                  ) : (
-                    byCreation
-                      .slice()
-                      .reverse()
-                      .map((p) => {
-                        const s = STATUS[p.status];
-                        const balance = (Number(p.totalPrice) || 0) - (Number(p.paid) || 0);
-                        const active = selectedId === p.id;
-                        const link = waLink(p.phone, p.name, p.client);
-                        return (
-                          <div key={p.id} className={`index-row ${active ? "is-active" : ""}`}>
-                            <button className="index-main" onClick={() => setSelectedId(p.id)}>
-                              <div className="index-top">
-                                <span className="folio">No.{folio(folioOf(p.id))}</span>
-                                <span className="index-name">{p.name || "Untitled"}</span>
-                              </div>
-                              <div className="index-client">{p.client || "No client"}</div>
-                              <div className="index-meta">
-                                <Stamp status={s} small />
-                                {balance > 0 && (
-                                  <span className="due">{fmt(balance)} {currency} due</span>
-                                )}
-                              </div>
-                            </button>
-                            {link && (
-                              <a
-                                href={link}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="wa-chip"
-                                onClick={(e) => e.stopPropagation()}
-                                title="WhatsApp"
-                              >
-                                <WhatsAppIcon size={14} />
-                              </a>
-                            )}
-                            {isMobile && (
-                              <button className="chev" onClick={() => setSelectedId(p.id)} aria-label="Open">
-                                <ChevronRight size={16} />
-                              </button>
+              ) : (
+                byCreation
+                  .slice()
+                  .reverse()
+                  .map((p) => {
+                    const s = STATUS[p.status];
+                    const balance = (Number(p.totalPrice) || 0) - (Number(p.paid) || 0);
+                    const active = selectedId === p.id;
+                    const link = waLink(p.phone, p.name, p.client);
+                    return (
+                      <div key={p.id} className={`index-row ${active ? "is-active" : ""}`}>
+                        <button className="index-main" onClick={() => setSelectedId(p.id)}>
+                          <div className="index-top">
+                            <span className="index-name">{p.name || "بدون عنوان"}</span>
+                          </div>
+                          <div className="index-client">{p.client || "—"}</div>
+                          <div className="index-meta">
+                            <Stamp status={s} small />
+                            {balance > 0 && (
+                              <span className="due">{fmt(balance)} {currency}</span>
                             )}
                           </div>
-                        );
-                      })
-                  )}
-                </div>
-              </aside>
-
-              <main className={`record-pane ${showRecord ? "is-visible" : "is-hidden"}`}>
-                {!selected ? (
-                  <div className="empty-record">
-                    <Seal large />
-                    <p>Select an entry from the index</p>
-                    <span>or open a new one to begin</span>
-                  </div>
-                ) : (
-                  <RecordPage
-                    project={selected}
-                    folioNumber={folio(folioOf(selected.id))}
-                    currency={currency}
-                    isMobile={isMobile}
-                    onBack={() => setSelectedId(null)}
-                    onChange={(patch) => updateProject(selected.id, patch)}
-                    onDelete={() => deleteProject(selected.id)}
-                    onAddRequest={addRequest}
-                    onToggleRequest={toggleRequest}
-                    onDeleteRequest={deleteRequest}
-                    newRequestText={newRequestText}
-                    setNewRequestText={setNewRequestText}
-                  />
-                )}
-              </main>
+                        </button>
+                        {link && (
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="wa-chip"
+                            onClick={(e) => e.stopPropagation()}
+                            title="WhatsApp"
+                          >
+                            <WhatsAppIcon size={14} />
+                          </a>
+                        )}
+                        {isMobile && (
+                          <button className="chev" onClick={() => setSelectedId(p.id)} aria-label="فتح">
+                            <ChevronRight size={16} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+              )}
             </div>
-          </>
-        )}
+          </aside>
+
+          <main className={`record-pane ${showRecord ? "is-visible" : "is-hidden"}`}>
+            {!selected ? (
+              <div className="empty-record">
+                <Logo height={48} />
+                <p>اختر مشروعاً من القائمة</p>
+              </div>
+            ) : (
+              <RecordPage
+                project={selected}
+                folioNumber={folio(folioOf(selected.id))}
+                currency={currency}
+                isMobile={isMobile}
+                onBack={() => setSelectedId(null)}
+                onChange={(patch) => updateProject(selected.id, patch)}
+                onDelete={() => deleteProject(selected.id)}
+                onAddRequest={addRequest}
+                onToggleRequest={toggleRequest}
+                onDeleteRequest={deleteRequest}
+                newRequestText={newRequestText}
+                setNewRequestText={setNewRequestText}
+              />
+            )}
+          </main>
+        </div>
       </div>
+
+      {!aiOpen && (
+        <button
+          type="button"
+          className={`ai-fab ${aiReady ? "is-ready" : ""}`}
+          onClick={() => setAiOpen(true)}
+          title="المساعد"
+          aria-label="فتح المساعد"
+        >
+          <img src={logoMe} alt="" className="fab-logo" />
+        </button>
+      )}
+
+      {aiOpen && (
+        <div className="ai-drawer-backdrop" onClick={() => setAiOpen(false)}>
+          <aside className="ai-drawer gpt slide-side" onClick={(e) => e.stopPropagation()} dir="rtl">
+            <div className="ai-drawer-head quiet">
+              <Logo height={26} />
+              <button type="button" className="icon-btn drawer-close" onClick={() => setAiOpen(false)} aria-label="إغلاق">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="ai-drawer-body">
+              <AIAdvisorPage
+                projects={projects}
+                currency={currency}
+                userName={userName}
+                setUserName={setUserName}
+                selectedId={selectedId}
+                setSelectedId={setSelectedId}
+                aiReady={aiReady}
+                setAiReady={setAiReady}
+              />
+            </div>
+          </aside>
+        </div>
+      )}
 
       {showNewForm && <NewEntryModal onClose={() => setShowNewForm(false)} onCreate={addProject} currency={currency} />}
     </Shell>
@@ -483,16 +468,15 @@ function IconBtn({ children, onClick, title }) {
   );
 }
 
-function Seal({ large }) {
-  const size = large ? 56 : 40;
+function Logo({ height = 32 }) {
   return (
-    <div
-      className="seal"
-      style={{ width: size, height: size, fontSize: large ? 18 : 14 }}
-      aria-hidden
-    >
-      M
-    </div>
+    <img
+      src={logoMe}
+      alt="Mohammad"
+      className="brand-logo"
+      style={{ height, width: "auto" }}
+      draggable={false}
+    />
   );
 }
 
@@ -543,10 +527,10 @@ function RecordPage({
         {isMobile ? (
           <button className="back-btn" onClick={onBack}>
             <ChevronRight size={14} style={{ transform: "rotate(180deg)" }} />
-            Index
+            رجوع
           </button>
         ) : (
-          <span className="entry-ref">Entry No.{folioNumber}</span>
+          <span className="entry-ref">#{folioNumber}</span>
         )}
 
         {confirmDelete ? (
@@ -760,9 +744,9 @@ function NewEntryModal({ onClose, onCreate, currency }) {
 
 const CSS = `
   :root {
-    --font-display: Georgia, "Times New Roman", Times, serif;
-    --font-body: Georgia, "Times New Roman", Times, serif;
-    --font-mono: Consolas, "Courier New", monospace;
+    --font-display: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-body: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-mono: ui-monospace, Consolas, monospace;
   }
 
   *, *::before, *::after { box-sizing: border-box; }
@@ -770,13 +754,26 @@ const CSS = `
   button { cursor: pointer; background: none; border: none; padding: 0; }
   a { color: ${INK.text}; }
   input:focus, select:focus, textarea:focus { outline: none; }
+  textarea { resize: none; }
 
   .shell {
     min-height: 100vh;
-    background:
-      radial-gradient(ellipse 80% 50% at 50% -10%, #1a1a1a 0%, transparent 55%),
-      ${INK.bg};
+    background: ${INK.bg};
     color: ${INK.text};
+  }
+
+  .boot-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .boot-logo {
+    height: 56px;
+    width: auto;
+    max-width: 160px;
+    object-fit: contain;
+    display: block;
   }
 
   .app-frame {
@@ -785,7 +782,6 @@ const CSS = `
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    border-inline: 1px solid ${INK.ruleFaint};
     background: ${INK.page};
   }
 
@@ -805,15 +801,22 @@ const CSS = `
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 20px 22px 18px;
-    border-bottom: 1px solid ${INK.rule};
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid ${INK.ruleFaint};
+    background: ${INK.sidebar};
   }
-  .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-logo {
+    flex-shrink: 0;
+    width: auto;
+    object-fit: contain;
+    display: block;
+  }
   .brand-title {
     margin: 0;
     font-family: var(--font-display);
-    font-size: 22px;
+    font-size: 17px;
     font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.1;
@@ -821,7 +824,6 @@ const CSS = `
   .brand-sub {
     margin: 3px 0 0;
     font-family: var(--font-body);
-    font-style: italic;
     font-size: 12px;
     color: ${INK.textFaint};
     display: flex;
@@ -830,16 +832,13 @@ const CSS = `
     flex-wrap: wrap;
   }
   .ai-pill {
-    font-family: var(--font-mono);
-    font-style: normal;
-    font-size: 9px;
-    letter-spacing: 0.08em;
-    text-transform: none;
-    color: ${INK.text};
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: ${INK.textMuted};
     border: 1px solid ${INK.rule};
     border-radius: 999px;
-    padding: 2px 8px;
-    background: ${INK.bg};
+    padding: 3px 10px;
+    background: ${INK.pageRaised};
   }
   .seal {
     flex-shrink: 0;
@@ -849,9 +848,7 @@ const CSS = `
     justify-content: center;
     background: #151515;
     border: 1px solid ${INK.rule};
-    box-shadow: inset 0 0 0 3px ${INK.bg}, inset 0 0 0 4px ${INK.rule};
     font-family: var(--font-display);
-    font-style: italic;
     font-weight: 600;
     color: ${INK.text};
   }
@@ -862,15 +859,46 @@ const CSS = `
     align-items: center;
     justify-content: center;
     padding: 24px 16px;
+    background: ${INK.bg};
+  }
+  .login-shell {
+    width: min(420px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .login-hero {
+    text-align: center;
+  }
+  .login-hero h1, .login-card h1, .login-card h2 {
+    margin: 0 0 8px;
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
   }
   .login-card {
-    width: 100%;
-    max-width: 420px;
-    background: ${INK.page};
-    border: 1px solid ${INK.rule};
-    border-radius: 14px;
-    padding: 28px 22px;
+    width: min(380px, 100%);
+    padding: 36px 28px 28px;
+    border-radius: 16px;
+    background: ${INK.sidebar};
+    border: 1px solid ${INK.ruleFaint};
     text-align: center;
+  }
+  .login-card.gpt {
+    box-shadow: 0 16px 48px rgba(0,0,0,0.28);
+  }
+  .login-logo {
+    height: 64px;
+    width: auto;
+    max-width: 200px;
+    object-fit: contain;
+    margin: 0 auto 18px;
+    display: block;
+  }
+  .login-one-line {
+    margin: 0 0 22px;
+    font-size: 15px;
+    color: ${INK.textMuted};
   }
   .login-seal {
     width: 52px;
@@ -882,46 +910,29 @@ const CSS = `
     justify-content: center;
     background: #151515;
     border: 1px solid ${INK.rule};
-    box-shadow: inset 0 0 0 3px ${INK.bg}, inset 0 0 0 4px ${INK.rule};
     font-family: var(--font-display);
-    font-style: italic;
     font-weight: 600;
     font-size: 18px;
   }
-  .login-card h1 {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: 28px;
-    font-weight: 600;
-  }
+  .login-seal.lg { width: 64px; height: 64px; font-size: 22px; }
   .login-sub {
-    margin: 10px 0 22px;
+    margin: 0 0 20px;
     font-family: var(--font-body);
     font-size: 13.5px;
     line-height: 1.6;
     color: ${INK.textMuted};
   }
-  .login-steps {
-    text-align: left;
-    direction: ltr;
-    margin: 0;
-    padding: 12px;
-    border-radius: 8px;
-    background: ${INK.bg};
-    border: 1px solid ${INK.rule};
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: ${INK.textMuted};
-    overflow-x: auto;
+  .login-bullets {
+    list-style: none;
+    margin: 18px 0 0;
+    padding: 0;
+    text-align: right;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    color: ${INK.textFaint};
+    line-height: 1.8;
   }
-  .login-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
-    margin-top: 16px;
-  }
-  .login-card .form-stack { text-align: right; }
+  .login-bullets li::before { content: "· "; color: ${INK.textMuted}; }
   .btn-google {
     width: 100%;
     display: inline-flex;
@@ -929,22 +940,88 @@ const CSS = `
     justify-content: center;
     gap: 10px;
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 999px;
     background: ${INK.white};
     color: #1a1a1a;
     font-family: var(--font-body);
     font-size: 15px;
     font-weight: 600;
-    transition: opacity 0.15s ease;
   }
-  .btn-google:hover { opacity: 0.92; }
   .btn-google:disabled { opacity: 0.6; cursor: default; }
-  .login-hint {
-    margin: 16px 0 0;
-    font-family: var(--font-body);
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${INK.textFaint};
+
+  .ai-fab {
+    position: fixed;
+    z-index: 60;
+    inset-inline-end: 18px;
+    bottom: 22px;
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a0a0a;
+    color: ${INK.text};
+    border: 1px solid ${INK.rule};
+    box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+    padding: 8px;
+  }
+  .fab-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .ai-fab.is-ready { box-shadow: 0 8px 28px rgba(0,0,0,0.35), 0 0 0 2px #4a4a4a; }
+  .ai-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    justify-content: flex-start;
+  }
+  .ai-drawer {
+    width: min(440px, 100%);
+    height: 100%;
+    background: ${INK.bg};
+    border-inline-end: 1px solid ${INK.ruleFaint};
+    display: flex;
+    flex-direction: column;
+    box-shadow: 12px 0 40px rgba(0,0,0,0.4);
+  }
+  .ai-drawer.gpt { width: min(520px, 100%); }
+  .ai-drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 10px 12px 14px;
+    border-bottom: 1px solid ${INK.ruleFaint};
+    background: ${INK.sidebar};
+  }
+  .ai-drawer-head.quiet { min-height: 52px; }
+  .drawer-close {
+    margin-inline-start: auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    color: ${INK.textMuted};
+  }
+  .drawer-close:hover {
+    background: ${INK.pageRaised};
+    color: ${INK.text};
+  }
+  .ai-drawer-head strong {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .ai-drawer-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .slide-side { animation: slideSide 0.28s ease both; }
+  @keyframes slideSide {
+    from { opacity: 0; transform: translateX(18px); }
+    to { opacity: 1; transform: translateX(0); }
   }
 
   .header-actions {
@@ -954,136 +1031,70 @@ const CSS = `
     flex-wrap: wrap;
   }
 
-  .view-switch {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 3px;
-    border: 1px solid ${INK.rule};
-    border-radius: 10px;
-    background: ${INK.bg};
-  }
-  .view-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
-    border-radius: 7px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    color: ${INK.textFaint};
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-  .view-btn:hover { color: ${INK.textMuted}; }
-  .view-btn.is-active {
-    background: ${INK.pageRaised};
-    color: ${INK.text};
-  }
-
-  /* Dedicated AI page */
+  /* Dedicated AI page — ChatGPT style */
   .ai-page {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    background: ${INK.page};
-  }
-  .ai-hero {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 18px;
-    padding: 22px 22px 16px;
-    border-bottom: 1px solid ${INK.ruleFaint};
-  }
-  .ai-kicker {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    color: ${INK.textFaint};
-    margin-bottom: 8px;
-  }
-  .ai-title {
-    margin: 0;
-    font-family: var(--font-display);
-    font-style: italic;
-    font-size: 28px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
-  .ai-sub {
-    margin: 8px 0 0;
-    max-width: 420px;
-    font-family: var(--font-body);
-    font-size: 13.5px;
-    line-height: 1.55;
-    color: ${INK.textMuted};
-  }
-  .ai-stats {
-    display: flex;
-    gap: 18px;
-  }
-  .ai-stats > div {
-    min-width: 72px;
-    padding: 12px 14px;
-    border: 1px solid ${INK.rule};
-    border-radius: 8px;
     background: ${INK.bg};
   }
-  .ai-stats span {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 9.5px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: ${INK.textFaint};
+  .ai-page.gpt-chat {
+    flex-direction: row;
   }
-  .ai-stats strong {
-    display: block;
-    margin-top: 6px;
-    font-family: var(--font-mono);
-    font-size: 16px;
-  }
-  .ai-tabs {
+  .ai-rail {
+    width: 52px;
+    flex-shrink: 0;
     display: flex;
-    gap: 4px;
-    padding: 12px 16px;
-    overflow-x: auto;
-    border-bottom: 1px solid ${INK.rule};
-  }
-  .ai-tab {
-    display: inline-flex;
+    flex-direction: column;
     align-items: center;
     gap: 6px;
-    flex-shrink: 0;
-    padding: 9px 12px;
-    border-radius: 8px;
-    font-family: var(--font-mono);
-    font-size: 11px;
+    padding: 12px 0;
+    border-inline-end: 1px solid ${INK.ruleFaint};
+    background: ${INK.sidebar};
+  }
+  .ai-rail-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: ${INK.textFaint};
   }
-  .ai-tab.is-active {
+  .ai-rail-btn:hover { background: ${INK.hover}; color: ${INK.text}; }
+  .ai-rail-btn.is-active {
     background: ${INK.pageRaised};
     color: ${INK.text};
-    border: 1px solid ${INK.rule};
   }
+  .ai-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: auto;
+    margin-bottom: 10px;
+    background: #555;
+  }
+  .ai-dot.on { background: #6fcf97; }
+
+  .ai-hero { display: none; }
+  .ai-kicker, .ai-title, .ai-sub, .ai-stats { display: none; }
+  .ai-tabs { display: none; }
+
   .ai-error {
-    margin: 12px 22px 0;
+    margin: 10px 14px 0;
     padding: 10px 12px;
     border: 1px solid ${INK.rule};
-    border-radius: 8px;
-    background: ${INK.bg};
+    border-radius: 12px;
+    background: ${INK.sidebar};
     font-family: var(--font-body);
     font-size: 13px;
     color: ${INK.text};
     white-space: pre-wrap;
   }
+  .ai-error.soft { border-radius: 12px; }
   .ai-error.is-ok {
-    border-color: #3a3a38;
+    border-color: ${INK.rule};
     color: ${INK.textMuted};
   }
   .ai-body-wrap {
@@ -1097,49 +1108,175 @@ const CSS = `
     display: flex;
     flex-direction: column;
     min-height: 0;
-    padding: 18px 22px 24px;
+    padding: 12px 16px 16px;
   }
+  .ai-panel.soft-panel { padding: 16px; }
   .ai-panel-toolbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
-  .ai-panel-toolbar h3 {
-    margin: 0;
-    font-family: var(--font-display);
-    font-style: italic;
-    font-size: 18px;
-    font-weight: 600;
-  }
-  .ai-panel-toolbar .btn-ghost,
-  .ai-panel-toolbar .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
+  .ai-panel-toolbar.quiet { margin-bottom: 8px; }
+  .ai-panel-toolbar h3 { display: none; }
   .ai-prose, .ai-body {
     margin: 0;
     white-space: pre-wrap;
     font-family: var(--font-body);
-    font-size: 14px;
-    line-height: 1.8;
+    font-size: 14.5px;
+    line-height: 1.7;
     color: ${INK.text};
   }
-  .chat-panel { padding-bottom: 0; }
+  .chat-panel.gpt { padding: 0; }
   .ai-panel-scroll {
     flex: 1;
     overflow-y: auto;
-    min-height: 280px;
-    max-height: calc(100vh - 340px);
-    padding-bottom: 12px;
+    min-height: 0;
+    padding: 8px 16px 12px;
   }
+  .chat-empty.gpt {
+    min-height: min(52vh, 420px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 10px;
+    padding: 24px 12px;
+  }
+  .chat-empty-logo {
+    height: 52px;
+    width: auto;
+    max-width: 160px;
+    object-fit: contain;
+    margin-bottom: 6px;
+    display: block;
+  }
+  .chat-empty.gpt h2 {
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .chat-hint { display: none; }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    max-width: 420px;
+  }
+  .chip.soft, .chip {
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: ${INK.pageRaised};
+    border: 1px solid ${INK.rule};
+    color: ${INK.textMuted};
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: right;
+  }
+  .chip.soft:hover, .chip:hover {
+    background: ${INK.hover};
+    color: ${INK.text};
+  }
+  .chat-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin: 14px 0;
+    max-width: 100%;
+  }
+  .chat-row.is-user {
+    justify-content: flex-start;
+    flex-direction: row-reverse;
+  }
+  .chat-avatar {
+    width: 36px;
+    height: 22px;
+    object-fit: contain;
+    flex-shrink: 0;
+    margin-top: 4px;
+    display: block;
+  }
+  .chat-bubble.gpt {
+    max-width: min(92%, 420px);
+    padding: 10px 14px;
+    border-radius: 18px;
+    background: transparent;
+  }
+  .chat-bubble.gpt.is-user {
+    background: ${INK.pageRaised};
+  }
+  .chat-bubble.gpt.is-ai {
+    padding-inline-start: 0;
+  }
+  .chat-role { display: none; }
+  .chat-text {
+    font-size: 15px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .typing-dots {
+    display: inline-flex;
+    gap: 5px;
+    padding: 12px 4px;
+  }
+  .typing-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${INK.textFaint};
+    animation: blink 1.2s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes blink {
+    0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-2px); }
+  }
+
   .sticky-compose {
     position: sticky;
     bottom: 0;
-    padding: 12px 0 18px;
-    background: linear-gradient(180deg, transparent, ${INK.page} 28%);
+    padding: 10px 14px 16px;
+    background: linear-gradient(180deg, transparent, ${INK.bg} 28%);
+  }
+  .composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 24px;
+    background: ${INK.composer};
+    border: 1px solid ${INK.rule};
+  }
+  .composer-input {
+    flex: 1;
+    min-height: 24px;
+    max-height: 140px;
+    border: none;
+    background: transparent;
+    font-size: 15px;
+    line-height: 1.45;
+    padding: 4px 6px;
+  }
+  .composer-send {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: ${INK.white};
+    color: #111;
+    flex-shrink: 0;
+  }
+  .composer-send:disabled {
+    opacity: 0.35;
+    cursor: default;
   }
   .loading-line {
     display: flex;
@@ -1148,25 +1285,23 @@ const CSS = `
     gap: 8px;
     padding: 28px 0;
     font-family: var(--font-body);
-    font-style: italic;
     color: ${INK.textFaint};
   }
 
   .save-error {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: ${INK.text};
-    letter-spacing: 0.04em;
+    font-family: var(--font-body);
+    font-size: 12px;
+    color: ${INK.textMuted};
   }
   .currency-select {
     width: 64px;
     padding: 9px 8px;
-    background: ${INK.bg};
+    background: ${INK.pageRaised};
     border: 1px solid ${INK.rule};
-    border-radius: 6px;
-    font-family: var(--font-mono);
-    font-size: 12px;
+    border-radius: 10px;
+    color: ${INK.text};
   }
+
   .tool-group {
     display: flex;
     align-items: center;
@@ -1196,34 +1331,33 @@ const CSS = `
     padding: 10px 14px;
     background: ${INK.white};
     color: #0A0A0A;
-    font-family: var(--font-mono);
-    font-size: 11.5px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 10px;
     transition: opacity 0.15s ease, transform 0.15s ease;
   }
   .btn-primary:hover { opacity: 0.92; }
   .btn-primary:active { transform: scale(0.98); }
   .btn-block { width: 100%; padding: 12px; }
   .btn-ghost {
-    font-family: var(--font-mono);
-    font-size: 11px;
+    font-family: var(--font-body);
+    font-size: 13px;
     color: ${INK.textMuted};
-    padding: 8px 10px;
-    border-radius: 6px;
+    padding: 8px 12px;
+    border-radius: 10px;
     border: 1px solid ${INK.rule};
     transition: color 0.15s ease, border-color 0.15s ease;
   }
   .btn-ghost:hover { color: ${INK.text}; border-color: ${INK.textMuted}; }
   .btn-danger {
-    font-family: var(--font-mono);
-    font-size: 11px;
+    font-family: var(--font-body);
+    font-size: 13px;
     padding: 8px 12px;
-    border-radius: 6px;
+    border-radius: 10px;
     background: ${INK.white};
     color: #0A0A0A;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   /* Totals */
@@ -1231,14 +1365,26 @@ const CSS = `
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 0;
-    padding: 4px 0;
-    border-bottom: 1px solid ${INK.rule};
+    padding: 2px 0;
+    border-bottom: 1px solid ${INK.ruleFaint};
+    background: ${INK.sidebar};
+  }
+  .totals.soft .total-label {
+    font-family: var(--font-body);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .totals.soft .total-value {
+    font-family: var(--font-body);
+    font-size: 16px;
+    font-weight: 600;
   }
   @media (min-width: 700px) {
     .totals { grid-template-columns: repeat(4, 1fr); }
   }
   .total-cell {
-    padding: 16px 22px;
+    padding: 14px 18px;
     border-inline-end: 1px solid ${INK.ruleFaint};
   }
   .total-cell.is-last { border-inline-end: none; }
@@ -1247,17 +1393,15 @@ const CSS = `
     .total-cell:nth-child(-n+2) { border-bottom: 1px solid ${INK.ruleFaint}; }
   }
   .total-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-family: var(--font-body);
+    font-size: 11px;
     color: ${INK.textFaint};
   }
   .total-value {
-    margin-top: 6px;
-    font-family: var(--font-mono);
-    font-size: 17px;
-    font-weight: 700;
+    margin-top: 4px;
+    font-family: var(--font-body);
+    font-size: 16px;
+    font-weight: 600;
     color: ${INK.textMuted};
     letter-spacing: -0.02em;
   }
@@ -1348,45 +1492,33 @@ const CSS = `
   }
 
   .index-pane {
-    border-inline-end: 1px solid ${INK.rule};
-    background: ${INK.bg};
+    border-inline-end: 1px solid ${INK.ruleFaint};
+    background: ${INK.sidebar};
     min-height: 420px;
   }
-  .pane-label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px 10px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: ${INK.textFaint};
-  }
-  .pane-count {
-    color: ${INK.textMuted};
-    letter-spacing: 0;
-    text-transform: none;
-  }
+  .pane-label { display: none; }
+  .pane-count { display: none; }
   .index-list {
     max-height: none;
     overflow-y: auto;
+    padding: 8px 0;
   }
   @media (min-width: 1024px) {
-    .index-list { max-height: calc(100vh - 220px); }
+    .index-list { max-height: calc(100vh - 180px); }
   }
 
   .index-row {
     display: flex;
     align-items: stretch;
-    border-bottom: 1px solid ${INK.ruleFaint};
-    border-inline-start: 2px solid transparent;
+    margin: 2px 8px;
+    border-radius: 12px;
+    border-bottom: none;
+    border-inline-start: none;
     transition: background 0.15s ease;
   }
   .index-row:hover { background: ${INK.hover}; }
   .index-row.is-active {
     background: ${INK.pageRaised};
-    border-inline-start-color: ${INK.white};
   }
   .index-main {
     flex: 1;
@@ -1395,16 +1527,10 @@ const CSS = `
     min-width: 0;
   }
   .index-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-  .folio {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: ${INK.textFaint};
-    flex-shrink: 0;
-  }
+  .folio { display: none; }
   .index-name {
-    font-family: var(--font-display);
-    font-style: italic;
-    font-size: 15px;
+    font-family: var(--font-body);
+    font-size: 14.5px;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -1452,8 +1578,7 @@ const CSS = `
   .empty-state p {
     margin: 0 0 14px;
     font-family: var(--font-body);
-    font-style: italic;
-    font-size: 13px;
+    font-size: 14px;
     color: ${INK.textFaint};
   }
 
@@ -1464,22 +1589,18 @@ const CSS = `
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 14px;
     color: ${INK.textFaint};
     text-align: center;
     padding: 40px 20px;
   }
   .empty-record p {
-    margin: 12px 0 0;
+    margin: 0;
     font-family: var(--font-body);
-    font-style: italic;
-    font-size: 14px;
+    font-size: 15px;
     color: ${INK.textMuted};
   }
-  .empty-record span {
-    font-family: var(--font-body);
-    font-size: 12px;
-  }
+  .empty-record span { display: none; }
 
   /* Record */
   .record {
