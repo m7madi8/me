@@ -28,21 +28,34 @@ const STATUS_AR = {
   settled: "تمت التسوية",
 };
 
-/** Prefer Vite proxy in dev; direct localhost works from hosted site on same PC. */
+/** True only when the app itself is served from this machine. */
+function isDevHost() {
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1";
+}
+
+/**
+ * Never call Ollama from a hosted origin (Vercel/web.app) —
+ * browsers block http://127.0.0.1 from https pages (CORS).
+ */
 function ollamaCandidates() {
+  if (!isDevHost()) return [];
   const saved = localStorage.getItem(BASE_KEY);
   const list = [];
-  if (saved) list.push(saved);
-  const host = window.location.hostname;
-  const isLocalHost = host === "localhost" || host === "127.0.0.1";
-  if (isLocalHost) list.push("/ollama");
-  list.push("http://127.0.0.1:11434", "http://localhost:11434");
+  if (saved && (saved.startsWith("/") || saved.includes("127.0.0.1") || saved.includes("localhost"))) {
+    list.push(saved);
+  }
+  list.push("/ollama", "http://127.0.0.1:11434", "http://localhost:11434");
   return [...new Set(list)];
 }
 
 async function fetchOllama(path, options) {
+  const bases = ollamaCandidates();
+  if (!bases.length) {
+    throw new Error("Ollama متاح فقط على localhost — من الرابط المنشور استخدم الأونلاين.");
+  }
   let lastErr = null;
-  for (const base of ollamaCandidates()) {
+  for (const base of bases) {
     try {
       const res = await fetch(`${base}${path}`, options);
       if (res.ok || res.status < 500) {
@@ -95,6 +108,20 @@ export async function ensureApiKeySeeded() {
 export async function ensureLocalAI() {
   const mode = getAiMode();
 
+  // Hosted site: skip Ollama entirely (avoids CORS noise) and use Groq.
+  if (!isDevHost() && mode !== "local") {
+    if (getApiKey()) {
+      localStorage.setItem("mohammad-ollama-ready", "1");
+      return { ok: true, channel: "online", message: "جاهز أونلاين عبر Groq" };
+    }
+    localStorage.removeItem("mohammad-ollama-ready");
+    return {
+      ok: false,
+      channel: "online",
+      message: "أضف مفتاح Groq في الإعدادات للعمل من الرابط المنشور.",
+    };
+  }
+
   if (mode === "online") {
     if (getApiKey()) {
       localStorage.setItem("mohammad-ollama-ready", "1");
@@ -105,6 +132,15 @@ export async function ensureLocalAI() {
       ok: false,
       channel: "online",
       message: "أضف مفتاح Groq في الإعدادات (أو VITE_GROQ_API_KEY في .env ثم أعد البناء).",
+    };
+  }
+
+  if (!isDevHost() && mode === "local") {
+    localStorage.removeItem("mohammad-ollama-ready");
+    return {
+      ok: false,
+      channel: "local",
+      message: "المحلي غير متاح من الرابط المنشور بسبب قيود المتصفح (CORS).\nاختر «تلقائي» أو «أونلاين».",
     };
   }
 
@@ -119,7 +155,7 @@ export async function ensureLocalAI() {
     return {
       ok: true,
       channel: "online",
-      message: "المحلي غير متاح — سيستخدم الأونلاين (Groq) خارج البيت.",
+      message: "المحلي غير متاح — سيستخدم الأونلاين (Groq).",
     };
   }
 
@@ -128,6 +164,13 @@ export async function ensureLocalAI() {
 }
 
 export async function pingOllama() {
+  if (!isDevHost()) {
+    return {
+      ok: false,
+      models: [],
+      message: "Ollama لا يُستدعى من الرابط المنشور. استخدم الأونلاين.",
+    };
+  }
   try {
     const res = await fetchOllama("/api/tags", { method: "GET" });
     if (!res.ok) {
@@ -150,13 +193,10 @@ export async function pingOllama() {
     const base = localStorage.getItem(BASE_KEY) || "local";
     return { ok: true, models, message: `جاهز محليًا — ${wanted}\n(${base})` };
   } catch (_) {
-    const hosted = !["localhost", "127.0.0.1"].includes(window.location.hostname);
     return {
       ok: false,
       models: [],
-      message: hosted
-        ? "Ollama غير متصل على هذا الجهاز.\nللعمل خارج البيت: اختر «أونلاين» أو «تلقائي» وأضف مفتاح Groq."
-        : "Ollama غير متصل. شغّله محليًا ثم:\nollama pull qwen3\nأو فعّل الأونلاين بمفتاح Groq.",
+      message: "Ollama غير متصل. شغّله محليًا ثم:\nollama pull qwen3\nأو فعّل الأونلاين بمفتاح Groq.",
     };
   }
 }
@@ -390,6 +430,14 @@ async function callOnline(messages, { temperature = 0.35, maxTokens = 1400 } = {
 /** Route by mode: local | online | auto (local then online). */
 async function callAI(messages, opts = {}) {
   const mode = getAiMode();
+
+  // From Vercel/hosted: never hit localhost Ollama (CORS).
+  if (!isDevHost()) {
+    if (mode === "local") {
+      throw new Error("المحلي غير متاح من الرابط المنشور. اختر «تلقائي» أو «أونلاين».");
+    }
+    return callOnline(messages, opts);
+  }
 
   if (mode === "online") return callOnline(messages, opts);
   if (mode === "local") return callLocal(messages, opts);
