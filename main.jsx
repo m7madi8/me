@@ -67,6 +67,7 @@ const emptyProject = () => ({
   client: "",
   phone: "",
   status: "proposed",
+  currency: "$",
   totalPrice: 0,
   paid: 0,
   costs: 0,
@@ -78,6 +79,34 @@ const emptyProject = () => ({
 });
 const fmt = (n) => (Number(n) || 0).toLocaleString("en-US", { maximumFractionDigits: 0 });
 const folio = (n) => String(n).padStart(3, "0");
+
+function projectCurrency(p) {
+  return p?.currency || "$";
+}
+
+/** Aggregate money fields grouped by each project's currency. */
+function totalsByCurrency(projects) {
+  const map = {};
+  for (const p of projects || []) {
+    const c = projectCurrency(p);
+    if (!map[c]) map[c] = { contracted: 0, paid: 0, costs: 0 };
+    map[c].contracted += Number(p.totalPrice) || 0;
+    map[c].paid += projectPaid(p);
+    map[c].costs += Number(p.costs) || 0;
+  }
+  return Object.entries(map).map(([currency, t]) => ({
+    currency,
+    contracted: t.contracted,
+    paid: t.paid,
+    outstanding: t.contracted - t.paid,
+    profit: t.paid - t.costs,
+  }));
+}
+
+function formatMoneyLines(rows, key) {
+  if (!rows.length) return `0 $`;
+  return rows.map((r) => `${fmt(r[key])} ${r.currency}`).join(" · ");
+}
 
 function normalizeUrl(url) {
   const u = String(url || "").trim();
@@ -141,7 +170,6 @@ export default function MHLedger() {
   const [aiOpen, setAiOpen] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [projects, setProjects] = useState([]);
-  const [currency, setCurrency] = useState("$");
   const [selectedId, setSelectedId] = useState(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newRequestText, setNewRequestText] = useState("");
@@ -206,15 +234,24 @@ export default function MHLedger() {
         }
 
         const data = mergeLedger(localData, cloudData);
-        setProjects(data.projects || []);
-        setCurrency(data.currency || "$");
+        const fallbackCurrency = data.currency || "$";
+        setProjects(
+          (data.projects || []).map((p) => ({
+            ...p,
+            currency: p.currency || fallbackCurrency,
+            payments: Array.isArray(p.payments) ? p.payments : [],
+            requests: Array.isArray(p.requests) ? p.requests : [],
+          }))
+        );
         setUserName(data.userName || OWNER.name);
 
         if (user && data === localData && localData) {
           try {
             await saveCloudLedger(user.uid, {
-              projects: localData.projects || [],
-              currency: localData.currency || "$",
+              projects: (localData.projects || []).map((p) => ({
+                ...p,
+                currency: p.currency || fallbackCurrency,
+              })),
               userName: localData.userName || OWNER.name,
               updatedAt: localData.updatedAt || Date.now(),
             });
@@ -238,7 +275,7 @@ export default function MHLedger() {
       return;
     }
     (async () => {
-      const payload = { projects, currency, userName, updatedAt: Date.now() };
+      const payload = { projects, userName, updatedAt: Date.now() };
       try {
         await window.storage.set(LOCAL_KEY, JSON.stringify(payload));
         if (user) {
@@ -252,7 +289,7 @@ export default function MHLedger() {
         else setSyncLabel("فشل الحفظ");
       }
     })();
-  }, [projects, currency, loaded, userName, user]);
+  }, [projects, loaded, userName, user]);
 
   async function handleLogout() {
     await logout();
@@ -327,11 +364,7 @@ export default function MHLedger() {
     updateProject(selected.id, { payments, paid: syncPaid(payments) });
   }
 
-  const totalContracted = projects.reduce((s, p) => s + (Number(p.totalPrice) || 0), 0);
-  const totalPaid = projects.reduce((s, p) => s + projectPaid(p), 0);
-  const totalOutstanding = totalContracted - totalPaid;
-  const totalCosts = projects.reduce((s, p) => s + (Number(p.costs) || 0), 0);
-  const totalProfit = totalPaid - totalCosts;
+  const moneyTotals = totalsByCurrency(projects);
 
   const showIndex = !isMobile || !selectedId;
   const showRecord = !isMobile || !!selectedId;
@@ -389,16 +422,6 @@ export default function MHLedger() {
               )
             )}
 
-            <select
-              className="currency-select"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              aria-label="العملة"
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
             <button className="btn-primary" onClick={() => setShowNewForm(true)}>
               <Plus size={16} strokeWidth={2.2} />
             </button>
@@ -406,10 +429,14 @@ export default function MHLedger() {
         </header>
 
         <section className="totals soft" aria-label="ملخص">
-          <TotalCell label="متعاقد" value={`${fmt(totalContracted)} ${currency}`} />
-          <TotalCell label="مستلم" value={`${fmt(totalPaid)} ${currency}`} bright />
-          <TotalCell label="متبقي" value={`${fmt(totalOutstanding)} ${currency}`} bright={totalOutstanding > 0} />
-          <TotalCell label="صافي" value={`${fmt(totalProfit)} ${currency}`} bright last />
+          <TotalCell label="متعاقد" value={formatMoneyLines(moneyTotals, "contracted")} />
+          <TotalCell label="مستلم" value={formatMoneyLines(moneyTotals, "paid")} bright />
+          <TotalCell
+            label="متبقي"
+            value={formatMoneyLines(moneyTotals, "outstanding")}
+            bright={moneyTotals.some((t) => t.outstanding > 0)}
+          />
+          <TotalCell label="صافي" value={formatMoneyLines(moneyTotals, "profit")} bright last />
         </section>
 
         <div className="spread">
@@ -428,6 +455,7 @@ export default function MHLedger() {
                   .reverse()
                   .map((p) => {
                     const s = STATUS[p.status];
+                    const cur = projectCurrency(p);
                     const balance = (Number(p.totalPrice) || 0) - projectPaid(p);
                     const active = selectedId === p.id;
                     const link = waLink(p.phone, p.name, p.client);
@@ -442,7 +470,7 @@ export default function MHLedger() {
                           <div className="index-meta">
                             <Stamp status={s} small />
                             {balance > 0 && (
-                              <span className="due">{fmt(balance)} {currency}</span>
+                              <span className="due">{fmt(balance)} {cur}</span>
                             )}
                           </div>
                         </button>
@@ -493,7 +521,6 @@ export default function MHLedger() {
               <RecordPage
                 project={selected}
                 folioNumber={folio(folioOf(selected.id))}
-                currency={currency}
                 isMobile={isMobile}
                 onBack={() => setSelectedId(null)}
                 onChange={(patch) => updateProject(selected.id, patch)}
@@ -541,7 +568,6 @@ export default function MHLedger() {
             <div className="ai-drawer-body">
               <AIAdvisorPage
                 projects={projects}
-                currency={currency}
                 userName={userName}
                 setUserName={setUserName}
                 selectedId={selectedId}
@@ -554,7 +580,7 @@ export default function MHLedger() {
         </div>
       )}
 
-      {showNewForm && <NewEntryModal onClose={() => setShowNewForm(false)} onCreate={addProject} currency={currency} />}
+      {showNewForm && <NewEntryModal onClose={() => setShowNewForm(false)} onCreate={addProject} />}
     </Shell>
   );
 }
@@ -622,11 +648,12 @@ function Field({ label, children }) {
 /* ---------- record ---------- */
 
 function RecordPage({
-  project, folioNumber, currency, isMobile, onBack, onChange, onDelete,
+  project, folioNumber, isMobile, onBack, onChange, onDelete,
   onAddRequest, onToggleRequest, onDeleteRequest, onAddPayment, onDeletePayment,
   newRequestText, setNewRequestText, newPayAmount, setNewPayAmount, newPayNote, setNewPayNote,
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const currency = projectCurrency(project);
   const paid = projectPaid(project);
   const balance = (Number(project.totalPrice) || 0) - paid;
   const profit = paid - (Number(project.costs) || 0);
@@ -735,6 +762,18 @@ function RecordPage({
 
       <div className="figures">
         <div className="figures-inputs">
+          <LedgerCell label="العملة">
+            <select
+              className="field-input currency-pick"
+              value={currency}
+              onChange={(e) => onChange({ currency: e.target.value })}
+              aria-label="عملة المشروع"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </LedgerCell>
           <LedgerCell label="Contracted">
             <MoneyInput value={project.totalPrice} onChange={(v) => onChange({ totalPrice: v })} currency={currency} />
           </LedgerCell>
@@ -889,12 +928,13 @@ function MoneyInput({ value, onChange, currency }) {
   );
 }
 
-function NewEntryModal({ onClose, onCreate, currency }) {
+function NewEntryModal({ onClose, onCreate }) {
   const [name, setName] = useState("");
   const [client, setClient] = useState("");
   const [phone, setPhone] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
   const [demoUrl, setDemoUrl] = useState("");
+  const [currency, setCurrency] = useState("$");
   const [status, setStatus] = useState("proposed");
 
   function submit() {
@@ -904,6 +944,7 @@ function NewEntryModal({ onClose, onCreate, currency }) {
       client: client.trim(),
       phone: phone.trim(),
       totalPrice: totalPrice || 0,
+      currency,
       demoUrl: normalizeUrl(demoUrl),
       status,
     });
@@ -925,6 +966,13 @@ function NewEntryModal({ onClose, onCreate, currency }) {
           </Field>
           <Field label="Phone">
             <input className="field-input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+970591234567" />
+          </Field>
+          <Field label="العملة">
+            <select className="field-input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </Field>
           <Field label={`Amount (${currency})`}>
             <input type="number" inputMode="decimal" className="field-input" value={totalPrice} onChange={(e) => setTotalPrice(e.target.value)} />
@@ -2058,7 +2106,7 @@ const CSS = `
     grid-template-columns: 1fr;
   }
   @media (min-width: 560px) {
-    .figures-inputs { grid-template-columns: repeat(3, 1fr); }
+    .figures-inputs { grid-template-columns: repeat(4, 1fr); }
   }
   .ledger-cell {
     padding: 14px 16px;
@@ -2070,6 +2118,11 @@ const CSS = `
       border-inline-end: 1px solid ${INK.ruleFaint};
     }
     .ledger-cell.is-last { border-inline-end: none; }
+  }
+  .currency-pick {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
   }
   .figures-summary {
     display: grid;

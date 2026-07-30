@@ -23,7 +23,6 @@ import logoMe from "./img/logo-me.webp";
  */
 export default function AIAdvisorPage({
   projects,
-  currency,
   userName,
   setUserName,
   selectedId,
@@ -87,7 +86,7 @@ export default function AIAdvisorPage({
     if (!requireLocal()) return;
     setLoading(true);
     try {
-      setBriefing(await getDailyBriefing(projects, currency, userName));
+      setBriefing(await getDailyBriefing(projects, userName));
     } catch (e) {
       setBriefing(`تعذّر جلب الإحاطة: ${e.message}`);
     }
@@ -99,7 +98,7 @@ export default function AIAdvisorPage({
     setLoading(true);
     setTab("analysis");
     try {
-      setAnalysis(await analyzeBusinessPerformance(projects, currency, userName));
+      setAnalysis(await analyzeBusinessPerformance(projects, userName));
     } catch (e) {
       setAnalysis(`حدث خطأ: ${e.message}`);
     }
@@ -110,7 +109,7 @@ export default function AIAdvisorPage({
     if (!requireLocal() || !selected) return;
     setLoading(true);
     try {
-      setProjectAdvice(await getProjectRecommendations(selected, currency, userName));
+      setProjectAdvice(await getProjectRecommendations(selected, projects, userName));
     } catch (e) {
       setProjectAdvice(`حدث خطأ: ${e.message}`);
     }
@@ -138,7 +137,7 @@ export default function AIAdvisorPage({
     setChatMessages((m) => [...m, { role: "user", content: q }]);
     setLoading(true);
     try {
-      const reply = await chatWithAI(projects, currency, userName, q, history, selected);
+      const reply = await chatWithAI(projects, userName, q, history, selected);
       setChatMessages((m) => [...m, { role: "assistant", content: reply }]);
     } catch (e) {
       setChatMessages((m) => [...m, { role: "assistant", content: `تعذّر الرد: ${e.message}` }]);

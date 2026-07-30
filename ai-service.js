@@ -180,15 +180,17 @@ function stripThink(text) {
     .trim();
 }
 
-export function buildLedgerSnapshot(projects, currency, userName = OWNER.name) {
+export function buildLedgerSnapshot(projects, userName = OWNER.name) {
   const list = Array.isArray(projects) ? projects : [];
-  const totals = {
-    contracted: list.reduce((s, p) => s + (Number(p.totalPrice) || 0), 0),
-    paid: list.reduce((s, p) => s + projectPaid(p), 0),
-    costs: list.reduce((s, p) => s + (Number(p.costs) || 0), 0),
-  };
-  totals.outstanding = totals.contracted - totals.paid;
-  totals.profit = totals.paid - totals.costs;
+
+  const byCurrency = {};
+  for (const p of list) {
+    const c = p.currency || "$";
+    if (!byCurrency[c]) byCurrency[c] = { contracted: 0, paid: 0, costs: 0 };
+    byCurrency[c].contracted += Number(p.totalPrice) || 0;
+    byCurrency[c].paid += projectPaid(p);
+    byCurrency[c].costs += Number(p.costs) || 0;
+  }
 
   const byStatus = list.reduce((acc, p) => {
     acc[p.status] = (acc[p.status] || 0) + 1;
@@ -202,6 +204,7 @@ export function buildLedgerSnapshot(projects, currency, userName = OWNER.name) {
       const contracted = Number(p.totalPrice) || 0;
       const paid = projectPaid(p);
       const costs = Number(p.costs) || 0;
+      const cur = p.currency || "$";
       const openReqs = (p.requests || []).filter((r) => !r.done);
       const payments = Array.isArray(p.payments) ? p.payments : [];
       return {
@@ -210,6 +213,7 @@ export function buildLedgerSnapshot(projects, currency, userName = OWNER.name) {
         client: p.client || "بدون عميل",
         phone: p.phone || "",
         status: STATUS_AR[p.status] || p.status,
+        currency: cur,
         contracted,
         paid,
         costs,
@@ -227,19 +231,23 @@ export function buildLedgerSnapshot(projects, currency, userName = OWNER.name) {
 
   return {
     owner: userName || OWNER.name,
-    currency,
+    byCurrency,
     counts: { projects: list.length, byStatus },
-    totals,
     entries,
   };
 }
 
 function snapshotText(snap) {
+  const totalLines = Object.entries(snap.byCurrency || {}).map(([c, t]) => {
+    const outstanding = t.contracted - t.paid;
+    const profit = t.paid - t.costs;
+    return `عملة ${c}: متعاقد ${money(t.contracted, c)} | مستلم ${money(t.paid, c)} | متبقي ${money(outstanding, c)} | صافي ${money(profit, c)}`;
+  });
+
   const lines = [
     `المالك: ${snap.owner}`,
-    `العملة: ${snap.currency}`,
     `عدد المشاريع: ${snap.counts.projects}`,
-    `متعاقد: ${money(snap.totals.contracted, snap.currency)} | مستلم: ${money(snap.totals.paid, snap.currency)} | متبقي: ${money(snap.totals.outstanding, snap.currency)} | صافي: ${money(snap.totals.profit, snap.currency)}`,
+    ...(totalLines.length ? totalLines : ["لا مجاميع بعد"]),
     `حسب الحالة: ${Object.entries(snap.counts.byStatus)
       .map(([k, v]) => `${STATUS_AR[k] || k}=${v}`)
       .join("، ") || "لا شيء"}`,
@@ -251,12 +259,13 @@ function snapshotText(snap) {
     lines.push("- السجل فارغ.");
   } else {
     snap.entries.forEach((e) => {
+      const c = e.currency || "$";
       lines.push(
-        `- #${e.index} «${e.name}» | ${e.client} | ${e.status} | عقد ${money(e.contracted, snap.currency)} | مدفوع ${money(e.paid, snap.currency)} | متبقي ${money(e.balanceDue, snap.currency)} | ربح ${money(e.profit, snap.currency)}${e.phone ? ` | هاتف ${e.phone}` : ""}`
+        `- #${e.index} «${e.name}» | ${e.client} | ${e.status} | عملة ${c} | عقد ${money(e.contracted, c)} | مدفوع ${money(e.paid, c)} | متبقي ${money(e.balanceDue, c)} | ربح ${money(e.profit, c)}${e.phone ? ` | هاتف ${e.phone}` : ""}`
       );
       if (e.paymentCount) {
         const detail = (e.lastPayments || [])
-          .map((pay) => `${money(pay.amount, snap.currency)}${pay.note ? `(${pay.note})` : ""}`)
+          .map((pay) => `${money(pay.amount, c)}${pay.note ? `(${pay.note})` : ""}`)
           .join("، ");
         lines.push(`  دفعات (${e.paymentCount}): ${detail}`);
       }
@@ -269,7 +278,7 @@ function snapshotText(snap) {
   if (due.length) {
     lines.push("", "أعلى المستحقات:");
     due.slice(0, 5).forEach((e) => {
-      lines.push(`- ${e.name} (${e.client}): ${money(e.balanceDue, snap.currency)}`);
+      lines.push(`- ${e.name} (${e.client}): ${money(e.balanceDue, e.currency || "$")}`);
     });
   }
 
@@ -397,8 +406,8 @@ async function callAI(messages, opts = {}) {
   }
 }
 
-export async function getDailyBriefing(projects, currency, userName = OWNER.name) {
-  const snap = buildLedgerSnapshot(projects, currency, userName);
+export async function getDailyBriefing(projects, userName = OWNER.name) {
+  const snap = buildLedgerSnapshot(projects, userName);
   try {
     return await callAI(
       [
@@ -418,8 +427,8 @@ export async function getDailyBriefing(projects, currency, userName = OWNER.name
   }
 }
 
-export async function analyzeBusinessPerformance(projects, currency, userName = OWNER.name) {
-  const snap = buildLedgerSnapshot(projects, currency, userName);
+export async function analyzeBusinessPerformance(projects, userName = OWNER.name) {
+  const snap = buildLedgerSnapshot(projects, userName);
   try {
     return await callAI(
       [
@@ -444,8 +453,9 @@ export async function analyzeBusinessPerformance(projects, currency, userName = 
   }
 }
 
-export async function getProjectRecommendations(project, currency, allProjects = [], userName = OWNER.name) {
-  const snap = buildLedgerSnapshot(allProjects.length ? allProjects : [project], currency, userName);
+export async function getProjectRecommendations(project, allProjects = [], userName = OWNER.name) {
+  const snap = buildLedgerSnapshot(allProjects.length ? allProjects : [project], userName);
+  const currency = project.currency || "$";
   const balance = (Number(project.totalPrice) || 0) - projectPaid(project);
   const profit = projectPaid(project) - (Number(project.costs) || 0);
   const openReqs = (project.requests || []).filter((r) => !r.done);
@@ -483,8 +493,8 @@ export async function getProjectRecommendations(project, currency, allProjects =
   }
 }
 
-export async function chatWithAI(projects, currency, userName, userMessage, history = [], selectedProject = null) {
-  const snap = buildLedgerSnapshot(projects, currency, userName);
+export async function chatWithAI(projects, userName, userMessage, history = [], selectedProject = null) {
+  const snap = buildLedgerSnapshot(projects, userName);
   const focus = selectedProject
     ? `\nالمشروع المفتوح الآن: «${selectedProject.name || "بدون عنوان"}» — ${selectedProject.client || "بدون عميل"} — ${STATUS_AR[selectedProject.status] || selectedProject.status}.`
     : "";
@@ -505,8 +515,9 @@ export async function chatWithAI(projects, currency, userName, userMessage, hist
   }
 }
 
-export async function draftWhatsAppFollowUp(project, currency, userName = OWNER.name) {
-  const snap = buildLedgerSnapshot([project], currency, userName);
+export async function draftWhatsAppFollowUp(project, userName = OWNER.name) {
+  const snap = buildLedgerSnapshot([project], userName);
+  const currency = project.currency || "$";
   const balance = (Number(project.totalPrice) || 0) - projectPaid(project);
   try {
     return await callAI(
