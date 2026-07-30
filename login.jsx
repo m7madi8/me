@@ -2,7 +2,10 @@ import React, { useEffect, useState } from "react";
 import { loginWithGoogle, completeGoogleRedirect, isFirebaseConfigured } from "./auth.js";
 import logoMe from "./img/logo-me.webp";
 
-export default function LoginScreen() {
+/**
+ * @param {{ onClose?: () => void, compact?: boolean }} props
+ */
+export default function LoginScreen({ onClose, compact = false } = {}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -13,13 +16,18 @@ export default function LoginScreen() {
 
   if (!isFirebaseConfigured()) {
     return (
-      <div className="login-screen" dir="rtl">
+      <div className={compact ? "login-modal-card" : "login-screen"} dir="rtl">
         <div className="login-card gpt">
           <img src={logoMe} alt="Mohammad" className="login-logo" />
           <p className="login-sub">
             إعدادات Firebase غير موجودة في هذا البناء.
-            تأكد من ملف `.env` ثم أعد `npm run build` والنشر.
+            تأكد من ملف `.env` ثم أعد البناء والنشر.
           </p>
+          {onClose && (
+            <button type="button" className="btn-ghost" onClick={onClose} style={{ marginTop: 12 }}>
+              إغلاق
+            </button>
+          )}
         </div>
       </div>
     );
@@ -30,28 +38,48 @@ export default function LoginScreen() {
     setBusy(true);
     try {
       await loginWithGoogle();
+      // Popup success: auth watcher closes modal. Redirect leaves the page.
     } catch (err) {
       setError(friendlyError(err));
       setBusy(false);
     }
   }
 
+  const card = (
+    <div className="login-card gpt fade-in">
+      {onClose && (
+        <button type="button" className="login-close" onClick={onClose} aria-label="إغلاق">
+          ×
+        </button>
+      )}
+      <img src={logoMe} alt="Mohammad" className="login-logo" />
+      <p className="login-one-line">تسجيل الدخول بـ Google</p>
+      <p className="login-sub" style={{ marginTop: -8 }}>
+        يُحفظ دخولك على هذا الجهاز دائمًا، وتُزامَن بياناتك بين أجهزتك.
+      </p>
+
+      {error && <div className="ai-error" style={{ marginBottom: 14, textAlign: "right" }}>{error}</div>}
+
+      <button type="button" className="btn-google" onClick={handleGoogle} disabled={busy}>
+        <GoogleIcon />
+        {busy ? "جارٍ الفتح…" : "تسجيل الدخول مع Google"}
+      </button>
+
+      <p className="login-persist-note">الجلسة تبقى محفوظة حتى تسجّل الخروج.</p>
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <div className="login-modal-backdrop" onClick={onClose} dir="rtl">
+        <div onClick={(e) => e.stopPropagation()}>{card}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="login-screen" dir="rtl">
-      <div className="login-card gpt fade-in">
-        <img src={logoMe} alt="Mohammad" className="login-logo" />
-        <p className="login-one-line">سجّل الدخول بحساب Google</p>
-        <p className="login-sub" style={{ marginTop: -8 }}>
-          عشان مشاريعك وأرقامك تكون نفسها على اللابتوب والتلفون.
-        </p>
-
-        {error && <div className="ai-error" style={{ marginBottom: 14, textAlign: "right" }}>{error}</div>}
-
-        <button type="button" className="btn-google" onClick={handleGoogle} disabled={busy}>
-          <GoogleIcon />
-          {busy ? "جارٍ الفتح…" : "المتابعة مع Google"}
-        </button>
-      </div>
+      {card}
     </div>
   );
 }

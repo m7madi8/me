@@ -139,6 +139,7 @@ export default function MHLedger() {
   const [user, setUser] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
   const [projects, setProjects] = useState([]);
   const [currency, setCurrency] = useState("$");
   const [selectedId, setSelectedId] = useState(null);
@@ -170,8 +171,8 @@ export default function MHLedger() {
     return watchAuth((u) => {
       setUser(u);
       setAuthReady(true);
+      if (u) setShowLogin(false);
       if (!u) {
-        setLoaded(false);
         firstLoad.current = true;
       }
     });
@@ -179,10 +180,6 @@ export default function MHLedger() {
 
   useEffect(() => {
     if (!authReady) return;
-    if (isFirebaseConfigured() && !user) {
-      setLoaded(false);
-      return;
-    }
 
     (async () => {
       setLoaded(false);
@@ -204,8 +201,8 @@ export default function MHLedger() {
             setSyncLabel(syncErrorMessage(err));
             setSaveError(true);
           }
-        } else if (!isFirebaseConfigured()) {
-          setSyncLabel("بدون حساب");
+        } else {
+          setSyncLabel(isFirebaseConfigured() ? "غير مسجّل — محلي" : "بدون حساب");
         }
 
         const data = mergeLedger(localData, cloudData);
@@ -213,7 +210,6 @@ export default function MHLedger() {
         setCurrency(data.currency || "$");
         setUserName(data.userName || OWNER.name);
 
-        // Push local to cloud when this device has newer/richer data
         if (user && data === localData && localData) {
           try {
             await saveCloudLedger(user.uid, {
@@ -350,14 +346,6 @@ export default function MHLedger() {
     );
   }
 
-  if (isFirebaseConfigured() && !user) {
-    return (
-      <Shell>
-        <LoginScreen />
-      </Shell>
-    );
-  }
-
   if (!loaded) {
     return (
       <Shell>
@@ -383,16 +371,22 @@ export default function MHLedger() {
                   </div>
                 </>
               ) : (
-                <div className="brand-sync">{syncLabel || "محلي"}</div>
+                <div className="brand-sync">محلي — سجّل الدخول للمزامنة</div>
               )}
             </div>
           </div>
 
           <div className="header-actions">
-            {user && (
+            {user ? (
               <IconBtn title="تسجيل الخروج" onClick={handleLogout}>
                 <LogOut size={16} />
               </IconBtn>
+            ) : (
+              isFirebaseConfigured() && (
+                <button type="button" className="btn-login" onClick={() => setShowLogin(true)}>
+                  تسجيل الدخول
+                </button>
+              )
             )}
 
             <select
@@ -521,7 +515,7 @@ export default function MHLedger() {
         </div>
       </div>
 
-      {!aiOpen && !showNewForm && (
+      {!aiOpen && !showNewForm && !showLogin && (
         <button
           type="button"
           className={`ai-fab ${aiReady ? "is-ready" : ""}`}
@@ -532,6 +526,8 @@ export default function MHLedger() {
           <img src={logoMe} alt="" className="fab-logo" />
         </button>
       )}
+
+      {showLogin && <LoginScreen compact onClose={() => setShowLogin(false)} />}
 
       {aiOpen && (
         <div className="ai-drawer-backdrop" onClick={() => setAiOpen(false)}>
@@ -1109,6 +1105,7 @@ const CSS = `
     font-weight: 600;
   }
   .login-card {
+    position: relative;
     width: min(380px, 100%);
     padding: 36px 28px 28px;
     border-radius: 16px;
@@ -1119,6 +1116,47 @@ const CSS = `
   .login-card.gpt {
     box-shadow: 0 16px 48px rgba(0,0,0,0.28);
   }
+  .login-close {
+    position: absolute;
+    top: 10px;
+    inset-inline-end: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 22px;
+    line-height: 1;
+    color: ${INK.textMuted};
+  }
+  .login-close:hover { background: ${INK.pageRaised}; color: ${INK.text}; }
+  .login-persist-note {
+    margin: 14px 0 0;
+    font-size: 12px;
+    color: ${INK.textFaint};
+    line-height: 1.5;
+  }
+  .login-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .btn-login {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 9px 14px;
+    border-radius: 999px;
+    background: ${INK.white};
+    color: #111;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .btn-login:hover { opacity: 0.92; }
   .login-logo {
     height: 64px;
     width: auto;
@@ -1216,6 +1254,7 @@ const CSS = `
   .ai-drawer {
     width: min(440px, 100%);
     height: 100%;
+    max-height: 100dvh;
     background: ${INK.bg};
     border-inline-end: 1px solid ${INK.ruleFaint};
     display: flex;
@@ -1223,6 +1262,9 @@ const CSS = `
     box-shadow: 12px 0 40px rgba(0,0,0,0.4);
   }
   .ai-drawer.gpt { width: min(520px, 100%); }
+  @media (max-width: 560px) {
+    .ai-drawer, .ai-drawer.gpt { width: 100%; }
+  }
   .ai-drawer-head {
     display: flex;
     align-items: center;
@@ -1249,7 +1291,26 @@ const CSS = `
     font-size: 16px;
     font-weight: 600;
   }
-  .ai-drawer-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .ai-drawer-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .ai-page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    background: ${INK.bg};
+  }
+  .ai-page.gpt-chat {
+    flex-direction: row;
+    height: 100%;
+    min-height: 0;
+  }
   .slide-side { animation: slideSide 0.28s ease both; }
   @keyframes slideSide {
     from { opacity: 0; transform: translateX(18px); }
@@ -1264,16 +1325,6 @@ const CSS = `
   }
 
   /* Dedicated AI page — ChatGPT style */
-  .ai-page {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    background: ${INK.bg};
-  }
-  .ai-page.gpt-chat {
-    flex-direction: row;
-  }
   .ai-rail {
     width: 52px;
     flex-shrink: 0;
@@ -1332,8 +1383,10 @@ const CSS = `
   .ai-body-wrap {
     flex: 1;
     min-height: 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
   .ai-panel {
     flex: 1;
@@ -1342,13 +1395,19 @@ const CSS = `
     min-height: 0;
     padding: 12px 16px 16px;
   }
-  .ai-panel.soft-panel { padding: 16px; }
+  .ai-panel.soft-panel {
+    padding: 16px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
   .ai-panel-toolbar {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 12px;
     margin-bottom: 12px;
+    flex-shrink: 0;
   }
   .ai-panel-toolbar.quiet { margin-bottom: 8px; }
   .ai-panel-toolbar h3 { display: none; }
@@ -1359,11 +1418,14 @@ const CSS = `
     font-size: 14.5px;
     line-height: 1.7;
     color: ${INK.text};
+    padding-bottom: 40px;
   }
   .chat-panel.gpt { padding: 0; }
   .ai-panel-scroll {
     flex: 1;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     min-height: 0;
     padding: 8px 16px 12px;
   }

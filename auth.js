@@ -7,6 +7,8 @@ import {
   signInWithRedirect,
   getRedirectResult,
   signOut,
+  setPersistence,
+  browserLocalPersistence,
 } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
@@ -20,7 +22,6 @@ const firebaseConfig = {
 };
 
 const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: "select_account" });
 
 export function isFirebaseConfigured() {
   return Boolean(
@@ -34,6 +35,7 @@ export function isFirebaseConfigured() {
 let app = null;
 let auth = null;
 let db = null;
+let persistenceReady = null;
 
 function ensureFirebase() {
   if (!isFirebaseConfigured()) {
@@ -43,8 +45,16 @@ function ensureFirebase() {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
+    // Keep the user signed in across browser restarts on this device.
+    persistenceReady = setPersistence(auth, browserLocalPersistence).catch(() => {});
   }
-  return { auth, db };
+  return { auth, db, persistenceReady };
+}
+
+async function readyAuth() {
+  const ctx = ensureFirebase();
+  if (ctx.persistenceReady) await ctx.persistenceReady;
+  return ctx.auth;
 }
 
 export function watchAuth(callback) {
@@ -52,13 +62,18 @@ export function watchAuth(callback) {
     callback(null);
     return () => {};
   }
-  const { auth } = ensureFirebase();
-  return onAuthStateChanged(auth, callback);
+  const { auth, persistenceReady } = ensureFirebase();
+  let unsub = () => {};
+  Promise.resolve(persistenceReady).finally(() => {
+    unsub = onAuthStateChanged(auth, callback);
+  });
+  return () => unsub();
 }
 
 /** Finish Google redirect flow (needed on phones). */
 export async function completeGoogleRedirect() {
   if (!isFirebaseConfigured()) return null;
+  await readyAuth();
   const { auth } = ensureFirebase();
   try {
     const result = await getRedirectResult(auth);
@@ -69,17 +84,16 @@ export async function completeGoogleRedirect() {
 }
 
 export async function loginWithGoogle() {
-  const { auth } = ensureFirebase();
+  const auth = await readyAuth();
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   if (isMobile) {
     await signInWithRedirect(auth, googleProvider);
-    return null; // page will navigate away
+    return null;
   }
   try {
     const cred = await signInWithPopup(auth, googleProvider);
     return cred.user;
   } catch (err) {
-    // Popup blocked → redirect
     if (
       err?.code === "auth/popup-blocked" ||
       err?.code === "auth/popup-closed-by-user" ||
@@ -94,7 +108,7 @@ export async function loginWithGoogle() {
 
 export async function logout() {
   if (!isFirebaseConfigured()) return;
-  const { auth } = ensureFirebase();
+  const auth = await readyAuth();
   await signOut(auth);
 }
 
@@ -131,7 +145,6 @@ export function mergeLedger(localData, cloudData) {
   if (cloudTs > localTs) return cloudData;
   if (localTs > cloudTs) return localData;
 
-  // Same/missing timestamps: keep the richer ledger so devices don't wipe each other.
   const localCount = (localData.projects || []).length;
   const cloudCount = (cloudData.projects || []).length;
   if (cloudCount > localCount) return cloudData;
