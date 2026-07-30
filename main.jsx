@@ -394,7 +394,7 @@ export default function MHLedger() {
       <div className="app-frame fade-in">
         <header className="header">
           <div className="brand">
-            <Logo height={34} />
+            <Logo height={28} />
             <div className="brand-meta">
               {user ? (
                 <>
@@ -404,7 +404,10 @@ export default function MHLedger() {
                   </div>
                 </>
               ) : (
-                <div className="brand-sync">محلي — سجّل الدخول للمزامنة</div>
+                <div className="brand-sync">
+                  <span className="sync-full">محلي — سجّل الدخول للمزامنة</span>
+                  <span className="sync-short">محلي</span>
+                </div>
               )}
             </div>
           </div>
@@ -417,13 +420,14 @@ export default function MHLedger() {
             ) : (
               isFirebaseConfigured() && (
                 <button type="button" className="btn-login" onClick={() => setShowLogin(true)}>
-                  تسجيل الدخول
+                  <span className="login-full">تسجيل الدخول</span>
+                  <span className="login-short">دخول</span>
                 </button>
               )
             )}
 
-            <button className="btn-primary" onClick={() => setShowNewForm(true)}>
-              <Plus size={16} strokeWidth={2.2} />
+            <button className="btn-primary btn-add" onClick={() => setShowNewForm(true)} aria-label="مشروع جديد">
+              <Plus size={18} strokeWidth={2.2} />
             </button>
           </div>
         </header>
@@ -1055,20 +1059,27 @@ const CSS = `
   /* Header */
   .header {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 14px 18px;
+    gap: 10px;
+    padding: 12px 14px;
     border-bottom: 1px solid ${INK.ruleFaint};
     background: ${INK.sidebar};
   }
-  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
   .brand-meta {
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    overflow: hidden;
   }
   .brand-email {
     font-size: 13px;
@@ -1076,13 +1087,17 @@ const CSS = `
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: min(42vw, 240px);
+    max-width: 100%;
   }
   .brand-sync {
     font-size: 11px;
     color: ${INK.textFaint};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .brand-sync.is-bad { color: #e8a0a0; }
+  .sync-short, .login-short { display: none; }
   .brand-logo {
     flex-shrink: 0;
     width: auto;
@@ -1196,15 +1211,29 @@ const CSS = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 9px 14px;
+    padding: 8px 12px;
     border-radius: 999px;
     background: ${INK.white};
     color: #111;
     font-size: 13px;
     font-weight: 600;
     white-space: nowrap;
+    flex-shrink: 0;
   }
   .btn-login:hover { opacity: 0.92; }
+  .btn-add {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
   .login-logo {
     height: 64px;
     width: auto;
@@ -1369,7 +1398,7 @@ const CSS = `
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-shrink: 0;
   }
 
   /* Dedicated AI page — ChatGPT style */
@@ -2418,9 +2447,16 @@ const CSS = `
   input[type=number]::-webkit-inner-spin-button { opacity: 0.35; }
 
   @media (max-width: 480px) {
-    .header { padding: 16px; }
-    .record { padding: 16px 16px 28px; }
+    .header { padding: 10px 12px; gap: 8px; }
+    .brand { gap: 8px; }
     .brand-title { font-size: 20px; }
+    .brand-email { font-size: 12px; }
+    .brand-sync { font-size: 10px; }
+    .sync-full, .login-full { display: none; }
+    .sync-short, .login-short { display: inline; }
+    .btn-login { padding: 8px 11px; font-size: 12px; }
+    .btn-add { width: 36px; height: 36px; }
+    .record { padding: 16px 16px 28px; }
     .btn-primary span { display: none; }
     .wa-btn span { display: none; }
     .wa-btn { padding: 0 12px; }
