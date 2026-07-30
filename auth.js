@@ -122,10 +122,31 @@ export async function saveCloudLedger(uid, payload) {
 }
 
 export function mergeLedger(localData, cloudData) {
-  if (!cloudData) return localData || { projects: [], currency: "$", userName: "mohammad" };
+  const empty = { projects: [], currency: "$", userName: "mohammad", updatedAt: 0 };
+  if (!cloudData) return localData || empty;
   if (!localData) return cloudData;
+
   const localTs = Number(localData.updatedAt) || 0;
   const cloudTs = Number(cloudData.updatedAt) || 0;
-  if (cloudTs >= localTs) return cloudData;
-  return localData;
+  if (cloudTs > localTs) return cloudData;
+  if (localTs > cloudTs) return localData;
+
+  // Same/missing timestamps: keep the richer ledger so devices don't wipe each other.
+  const localCount = (localData.projects || []).length;
+  const cloudCount = (cloudData.projects || []).length;
+  if (cloudCount > localCount) return cloudData;
+  if (localCount > cloudCount) return localData;
+  return cloudTs >= localTs ? cloudData : localData;
+}
+
+export function syncErrorMessage(err) {
+  const code = err?.code || "";
+  const msg = String(err?.message || "");
+  if (code.includes("permission-denied") || msg.includes("permission")) {
+    return "رفض Firestore الكتابة — انشر قواعد قاعدة البيانات من Firebase.";
+  }
+  if (code.includes("unavailable") || msg.includes("network")) {
+    return "لا اتصال — البيانات محفوظة على الجهاز مؤقتًا.";
+  }
+  return err?.message || "فشلت المزامنة السحابية";
 }

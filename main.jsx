@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { Plus, Trash2, X, Check, ChevronRight, LogOut } from "lucide-react";
+import { Plus, Trash2, X, Check, ChevronRight, LogOut, ExternalLink } from "lucide-react";
 import { ensureLocalAI, OWNER } from "./ai-service.js";
 import AIAdvisorPage from "./ai-panel.jsx";
 import LoginScreen from "./login.jsx";
@@ -12,6 +12,7 @@ import {
   loadCloudLedger,
   saveCloudLedger,
   mergeLedger,
+  syncErrorMessage,
 } from "./auth.js";
 
 if (!window.storage) {
@@ -70,11 +71,50 @@ const emptyProject = () => ({
   paid: 0,
   costs: 0,
   notes: "",
+  demoUrl: "",
   requests: [],
+  payments: [],
   createdAt: Date.now(),
 });
 const fmt = (n) => (Number(n) || 0).toLocaleString("en-US", { maximumFractionDigits: 0 });
 const folio = (n) => String(n).padStart(3, "0");
+
+function normalizeUrl(url) {
+  const u = String(url || "").trim();
+  if (!u) return "";
+  if (/^https?:\/\//i.test(u)) return u;
+  return `https://${u}`;
+}
+
+function demoHref(project) {
+  const href = normalizeUrl(project?.demoUrl);
+  return href || null;
+}
+
+/** Sum of payment entries; falls back to legacy `paid` if none yet. */
+function projectPaid(p) {
+  const payments = Array.isArray(p?.payments) ? p.payments : [];
+  if (payments.length > 0) {
+    return payments.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  }
+  return Number(p?.paid) || 0;
+}
+
+function fmtPayDate(ts) {
+  try {
+    return new Date(ts || Date.now()).toLocaleDateString("ar-EG", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch (_) {
+    return "";
+  }
+}
+
+function syncPaid(payments) {
+  return (payments || []).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+}
 
 function waLink(phone, name, client) {
   const digits = (phone || "").replace(/[^\d]/g, "");
@@ -104,6 +144,8 @@ export default function MHLedger() {
   const [selectedId, setSelectedId] = useState(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newRequestText, setNewRequestText] = useState("");
+  const [newPayAmount, setNewPayAmount] = useState("");
+  const [newPayNote, setNewPayNote] = useState("");
   const [saveError, setSaveError] = useState(false);
   const [syncLabel, setSyncLabel] = useState("");
   const [isMobile, setIsMobile] = useState(false);
@@ -157,9 +199,13 @@ export default function MHLedger() {
           try {
             cloudData = await loadCloudLedger(user.uid);
             setSyncLabel("متزامن");
-          } catch (_) {
-            setSyncLabel("محلي فقط");
+            setSaveError(false);
+          } catch (err) {
+            setSyncLabel(syncErrorMessage(err));
+            setSaveError(true);
           }
+        } else if (!isFirebaseConfigured()) {
+          setSyncLabel("بدون حساب");
         }
 
         const data = mergeLedger(localData, cloudData);
@@ -167,8 +213,8 @@ export default function MHLedger() {
         setCurrency(data.currency || "$");
         setUserName(data.userName || OWNER.name);
 
-        // If local was newer, push once to cloud
-        if (user && localData && (!cloudData || (localData.updatedAt || 0) > (cloudData.updatedAt || 0))) {
+        // Push local to cloud when this device has newer/richer data
+        if (user && data === localData && localData) {
           try {
             await saveCloudLedger(user.uid, {
               projects: localData.projects || [],
@@ -176,7 +222,12 @@ export default function MHLedger() {
               userName: localData.userName || OWNER.name,
               updatedAt: localData.updatedAt || Date.now(),
             });
-          } catch (_) {}
+            setSyncLabel("متزامن");
+            setSaveError(false);
+          } catch (err) {
+            setSyncLabel(syncErrorMessage(err));
+            setSaveError(true);
+          }
         }
       } catch (e) {}
       firstLoad.current = true;
@@ -201,7 +252,8 @@ export default function MHLedger() {
         setSaveError(false);
       } catch (e) {
         setSaveError(true);
-        setSyncLabel("فشل المزامنة");
+        if (user) setSyncLabel(syncErrorMessage(e));
+        else setSyncLabel("فشل الحفظ");
       }
     })();
   }, [projects, currency, loaded, userName, user]);
@@ -245,9 +297,42 @@ export default function MHLedger() {
   function deleteRequest(reqId) {
     updateProject(selected.id, { requests: selected.requests.filter((r) => r.id !== reqId) });
   }
+  function addPayment(amount, note) {
+    if (!selected) return;
+    const n = Number(amount);
+    if (!n || n <= 0) return;
+    const list = Array.isArray(selected.payments) ? selected.payments : [];
+    let payments = list;
+    // Migrate legacy single paid total into first recorded payment
+    if (payments.length === 0 && Number(selected.paid) > 0) {
+      payments = [
+        {
+          id: uid(),
+          amount: Number(selected.paid),
+          note: "رصيد سابق",
+          at: selected.createdAt || Date.now(),
+        },
+      ];
+    }
+    const pay = {
+      id: uid(),
+      amount: n,
+      note: (note || "").trim(),
+      at: Date.now(),
+    };
+    payments = [pay, ...payments];
+    updateProject(selected.id, { payments, paid: syncPaid(payments) });
+    setNewPayAmount("");
+    setNewPayNote("");
+  }
+  function deletePayment(payId) {
+    if (!selected) return;
+    const payments = (selected.payments || []).filter((p) => p.id !== payId);
+    updateProject(selected.id, { payments, paid: syncPaid(payments) });
+  }
 
   const totalContracted = projects.reduce((s, p) => s + (Number(p.totalPrice) || 0), 0);
-  const totalPaid = projects.reduce((s, p) => s + (Number(p.paid) || 0), 0);
+  const totalPaid = projects.reduce((s, p) => s + projectPaid(p), 0);
   const totalOutstanding = totalContracted - totalPaid;
   const totalCosts = projects.reduce((s, p) => s + (Number(p.costs) || 0), 0);
   const totalProfit = totalPaid - totalCosts;
@@ -289,12 +374,21 @@ export default function MHLedger() {
         <header className="header">
           <div className="brand">
             <Logo height={34} />
-            {syncLabel && <span className="ai-pill">{syncLabel}</span>}
+            <div className="brand-meta">
+              {user ? (
+                <>
+                  <div className="brand-email" title={user.email}>{user.email}</div>
+                  <div className={`brand-sync ${saveError ? "is-bad" : ""}`}>
+                    {syncLabel || "جاري المزامنة…"}
+                  </div>
+                </>
+              ) : (
+                <div className="brand-sync">{syncLabel || "محلي"}</div>
+              )}
+            </div>
           </div>
 
           <div className="header-actions">
-            {saveError && <span className="save-error">فشل الحفظ</span>}
-
             {user && (
               <IconBtn title="تسجيل الخروج" onClick={handleLogout}>
                 <LogOut size={16} />
@@ -340,9 +434,10 @@ export default function MHLedger() {
                   .reverse()
                   .map((p) => {
                     const s = STATUS[p.status];
-                    const balance = (Number(p.totalPrice) || 0) - (Number(p.paid) || 0);
+                    const balance = (Number(p.totalPrice) || 0) - projectPaid(p);
                     const active = selectedId === p.id;
                     const link = waLink(p.phone, p.name, p.client);
+                    const demo = demoHref(p);
                     return (
                       <div key={p.id} className={`index-row ${active ? "is-active" : ""}`}>
                         <button className="index-main" onClick={() => setSelectedId(p.id)}>
@@ -357,6 +452,19 @@ export default function MHLedger() {
                             )}
                           </div>
                         </button>
+                        {demo && (
+                          <a
+                            href={demo}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="demo-chip"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Demo"
+                          >
+                            <ExternalLink size={13} />
+                            Demo
+                          </a>
+                        )}
                         {link && (
                           <a
                             href={link}
@@ -399,8 +507,14 @@ export default function MHLedger() {
                 onAddRequest={addRequest}
                 onToggleRequest={toggleRequest}
                 onDeleteRequest={deleteRequest}
+                onAddPayment={addPayment}
+                onDeletePayment={deletePayment}
                 newRequestText={newRequestText}
                 setNewRequestText={setNewRequestText}
+                newPayAmount={newPayAmount}
+                setNewPayAmount={setNewPayAmount}
+                newPayNote={newPayNote}
+                setNewPayNote={setNewPayNote}
               />
             )}
           </main>
@@ -513,13 +627,23 @@ function Field({ label, children }) {
 
 function RecordPage({
   project, folioNumber, currency, isMobile, onBack, onChange, onDelete,
-  onAddRequest, onToggleRequest, onDeleteRequest, newRequestText, setNewRequestText,
+  onAddRequest, onToggleRequest, onDeleteRequest, onAddPayment, onDeletePayment,
+  newRequestText, setNewRequestText, newPayAmount, setNewPayAmount, newPayNote, setNewPayNote,
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const balance = (Number(project.totalPrice) || 0) - (Number(project.paid) || 0);
-  const profit = (Number(project.paid) || 0) - (Number(project.costs) || 0);
+  const paid = projectPaid(project);
+  const balance = (Number(project.totalPrice) || 0) - paid;
+  const profit = paid - (Number(project.costs) || 0);
   const openCount = project.requests.filter((r) => !r.done).length;
   const link = waLink(project.phone, project.name, project.client);
+  const demo = demoHref(project);
+  const payments = Array.isArray(project.payments) ? project.payments : [];
+  const displayPayments =
+    payments.length > 0
+      ? payments
+      : Number(project.paid) > 0
+        ? [{ id: "_legacy", amount: Number(project.paid), note: "رصيد مسجّل", at: project.createdAt, legacy: true }]
+        : [];
 
   return (
     <div className="record fade-in">
@@ -533,16 +657,24 @@ function RecordPage({
           <span className="entry-ref">#{folioNumber}</span>
         )}
 
-        {confirmDelete ? (
-          <div className="confirm-row">
-            <button className="btn-danger" onClick={onDelete}>Delete</button>
-            <button className="btn-ghost" onClick={() => setConfirmDelete(false)}>Cancel</button>
-          </div>
-        ) : (
-          <IconBtn title="Delete" onClick={() => setConfirmDelete(true)}>
-            <Trash2 size={16} />
-          </IconBtn>
-        )}
+        <div className="record-toolbar-actions">
+          {demo && (
+            <a href={demo} target="_blank" rel="noreferrer" className="demo-chip is-lg">
+              <ExternalLink size={14} />
+              Demo
+            </a>
+          )}
+          {confirmDelete ? (
+            <div className="confirm-row">
+              <button className="btn-danger" onClick={onDelete}>Delete</button>
+              <button className="btn-ghost" onClick={() => setConfirmDelete(false)}>Cancel</button>
+            </div>
+          ) : (
+            <IconBtn title="Delete" onClick={() => setConfirmDelete(true)}>
+              <Trash2 size={16} />
+            </IconBtn>
+          )}
+        </div>
       </div>
 
       <section className="record-identity">
@@ -576,6 +708,15 @@ function RecordPage({
             <span>WhatsApp</span>
           </a>
         </div>
+        <Field label="رابط المشروع (اختياري)">
+          <input
+            className="field-input mono"
+            value={project.demoUrl || ""}
+            placeholder="https://demo.example.com"
+            onChange={(e) => onChange({ demoUrl: e.target.value })}
+            onBlur={(e) => onChange({ demoUrl: normalizeUrl(e.target.value) })}
+          />
+        </Field>
       </section>
 
       <Field label="Status">
@@ -602,7 +743,10 @@ function RecordPage({
             <MoneyInput value={project.totalPrice} onChange={(v) => onChange({ totalPrice: v })} currency={currency} />
           </LedgerCell>
           <LedgerCell label="Received">
-            <MoneyInput value={project.paid} onChange={(v) => onChange({ paid: v })} currency={currency} />
+            <div className="money is-readonly">
+              <span>{currency}</span>
+              <strong>{fmt(paid)}</strong>
+            </div>
           </LedgerCell>
           <LedgerCell label="Costs" last>
             <MoneyInput value={project.costs} onChange={(v) => onChange({ costs: v })} currency={currency} />
@@ -620,6 +764,59 @@ function RecordPage({
         </div>
       </div>
 
+      <section className="amendments payments-block" dir="rtl">
+        <div className="section-title">
+          الدفعات
+          {displayPayments.length > 0 && (
+            <span className="section-count">{displayPayments.length}</span>
+          )}
+        </div>
+
+        <div className="pay-compose">
+          <input
+            type="number"
+            inputMode="decimal"
+            className="field-input"
+            placeholder={`المبلغ (${currency})`}
+            value={newPayAmount}
+            onChange={(e) => setNewPayAmount(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && onAddPayment(newPayAmount, newPayNote)}
+          />
+          <input
+            className="field-input"
+            placeholder="ملاحظة (اختياري)"
+            value={newPayNote}
+            onChange={(e) => setNewPayNote(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && onAddPayment(newPayAmount, newPayNote)}
+          />
+          <button className="btn-primary" type="button" onClick={() => onAddPayment(newPayAmount, newPayNote)}>
+            إضافة
+          </button>
+        </div>
+
+        <div className="pay-list">
+          {displayPayments.length === 0 && (
+            <p className="muted-italic">لا دفعات بعد — سجّل أول دفعة أعلاه.</p>
+          )}
+          {displayPayments.map((pay) => (
+            <div key={pay.id} className="pay-row">
+              <div className="pay-main">
+                <strong className="pay-amount">{fmt(pay.amount)} {currency}</strong>
+                <span className="pay-meta">
+                  {fmtPayDate(pay.at)}
+                  {pay.note ? ` · ${pay.note}` : ""}
+                </span>
+              </div>
+              {!pay.legacy && (
+                <button type="button" className="icon-btn" onClick={() => onDeletePayment(pay.id)} aria-label="حذف دفعة">
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <Field label="Notes">
         <textarea
           className="field-input notes"
@@ -630,25 +827,25 @@ function RecordPage({
       </Field>
 
       <section className="amendments">
-        <div className="pane-label">
-          Client requests
-          {openCount > 0 && <span className="pane-count">{openCount} open</span>}
+        <div className="section-title">
+          طلبات العميل
+          {openCount > 0 && <span className="section-count">{openCount}</span>}
         </div>
 
         <div className="request-compose">
           <input
             className="field-input"
-            placeholder="What did the client ask for?"
+            placeholder="ماذا طلب العميل؟"
             value={newRequestText}
             onChange={(e) => setNewRequestText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onAddRequest(newRequestText)}
           />
-          <button className="btn-primary" onClick={() => onAddRequest(newRequestText)}>Add</button>
+          <button className="btn-primary" onClick={() => onAddRequest(newRequestText)}>إضافة</button>
         </div>
 
         <div className="request-list">
           {project.requests.length === 0 && (
-            <p className="muted-italic">Nothing on file.</p>
+            <p className="muted-italic">لا طلبات.</p>
           )}
           {project.requests.map((r, i) => (
             <div key={r.id} className="request-row">
@@ -701,11 +898,19 @@ function NewEntryModal({ onClose, onCreate, currency }) {
   const [client, setClient] = useState("");
   const [phone, setPhone] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
+  const [demoUrl, setDemoUrl] = useState("");
   const [status, setStatus] = useState("proposed");
 
   function submit() {
     if (!name.trim()) return;
-    onCreate({ name: name.trim(), client: client.trim(), phone: phone.trim(), totalPrice: totalPrice || 0, status });
+    onCreate({
+      name: name.trim(),
+      client: client.trim(),
+      phone: phone.trim(),
+      totalPrice: totalPrice || 0,
+      demoUrl: normalizeUrl(demoUrl),
+      status,
+    });
   }
 
   return (
@@ -734,6 +939,14 @@ function NewEntryModal({ onClose, onCreate, currency }) {
                 <option key={k} value={k}>{STATUS[k].label}</option>
               ))}
             </select>
+          </Field>
+          <Field label="رابط المشروع (اختياري)">
+            <input
+              className="field-input"
+              value={demoUrl}
+              onChange={(e) => setDemoUrl(e.target.value)}
+              placeholder="https://demo.example.com"
+            />
           </Field>
           <button className="btn-primary btn-block" onClick={submit}>Open entry</button>
         </div>
@@ -807,6 +1020,25 @@ const CSS = `
     background: ${INK.sidebar};
   }
   .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-meta {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .brand-email {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(42vw, 240px);
+  }
+  .brand-sync {
+    font-size: 11px;
+    color: ${INK.textFaint};
+  }
+  .brand-sync.is-bad { color: #e8a0a0; }
   .brand-logo {
     flex-shrink: 0;
     width: auto;
@@ -1569,6 +1801,40 @@ const CSS = `
     transition: border-color 0.15s ease, color 0.15s ease;
   }
   .wa-chip:hover { border-color: ${INK.text}; color: ${INK.text}; }
+  .demo-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    gap: 5px;
+    height: 34px;
+    padding: 0 12px;
+    margin-inline-end: 8px;
+    border-radius: 999px;
+    border: 1px solid ${INK.rule};
+    background: ${INK.pageRaised};
+    color: ${INK.text};
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+    text-decoration: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .demo-chip:hover {
+    border-color: ${INK.textMuted};
+    background: ${INK.hover};
+  }
+  .demo-chip.is-lg {
+    height: 36px;
+    padding: 0 14px;
+    margin: 0;
+    font-size: 13px;
+  }
+  .record-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
   .chev { border: none; color: ${INK.textFaint}; margin-inline-end: 6px; }
 
   .empty-state {
@@ -1799,6 +2065,63 @@ const CSS = `
   .wa-btn.is-ready:hover { border-color: ${INK.text}; }
 
   .amendments { display: flex; flex-direction: column; gap: 12px; }
+  .section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: ${INK.text};
+  }
+  .section-count {
+    font-size: 12px;
+    font-weight: 500;
+    color: ${INK.textFaint};
+    background: ${INK.pageRaised};
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+  .pay-compose {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  @media (min-width: 560px) {
+    .pay-compose {
+      grid-template-columns: 120px 1fr auto;
+      align-items: center;
+    }
+  }
+  .pay-list { display: flex; flex-direction: column; }
+  .pay-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid ${INK.ruleFaint};
+  }
+  .pay-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .pay-amount {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .pay-meta {
+    font-size: 12px;
+    color: ${INK.textFaint};
+  }
+  .money.is-readonly {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 8px 0 2px;
+    color: ${INK.text};
+  }
+  .money.is-readonly strong {
+    font-size: 18px;
+    font-weight: 600;
+  }
   .request-compose { display: flex; gap: 8px; }
   .request-row {
     display: flex;

@@ -161,6 +161,14 @@ export async function pingOllama() {
   }
 }
 
+function projectPaid(p) {
+  const payments = Array.isArray(p?.payments) ? p.payments : [];
+  if (payments.length > 0) {
+    return payments.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  }
+  return Number(p?.paid) || 0;
+}
+
 function money(n, currency) {
   return `${(Number(n) || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })} ${currency}`;
 }
@@ -176,7 +184,7 @@ export function buildLedgerSnapshot(projects, currency, userName = OWNER.name) {
   const list = Array.isArray(projects) ? projects : [];
   const totals = {
     contracted: list.reduce((s, p) => s + (Number(p.totalPrice) || 0), 0),
-    paid: list.reduce((s, p) => s + (Number(p.paid) || 0), 0),
+    paid: list.reduce((s, p) => s + projectPaid(p), 0),
     costs: list.reduce((s, p) => s + (Number(p.costs) || 0), 0),
   };
   totals.outstanding = totals.contracted - totals.paid;
@@ -192,9 +200,10 @@ export function buildLedgerSnapshot(projects, currency, userName = OWNER.name) {
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
     .map((p, i) => {
       const contracted = Number(p.totalPrice) || 0;
-      const paid = Number(p.paid) || 0;
+      const paid = projectPaid(p);
       const costs = Number(p.costs) || 0;
       const openReqs = (p.requests || []).filter((r) => !r.done);
+      const payments = Array.isArray(p.payments) ? p.payments : [];
       return {
         index: i + 1,
         name: p.name || "بدون عنوان",
@@ -208,6 +217,11 @@ export function buildLedgerSnapshot(projects, currency, userName = OWNER.name) {
         profit: paid - costs,
         notes: (p.notes || "").slice(0, 180),
         openRequests: openReqs.map((r) => r.text).slice(0, 6),
+        paymentCount: payments.length,
+        lastPayments: payments.slice(0, 4).map((pay) => ({
+          amount: Number(pay.amount) || 0,
+          note: pay.note || "",
+        })),
       };
     });
 
@@ -240,6 +254,12 @@ function snapshotText(snap) {
       lines.push(
         `- #${e.index} «${e.name}» | ${e.client} | ${e.status} | عقد ${money(e.contracted, snap.currency)} | مدفوع ${money(e.paid, snap.currency)} | متبقي ${money(e.balanceDue, snap.currency)} | ربح ${money(e.profit, snap.currency)}${e.phone ? ` | هاتف ${e.phone}` : ""}`
       );
+      if (e.paymentCount) {
+        const detail = (e.lastPayments || [])
+          .map((pay) => `${money(pay.amount, snap.currency)}${pay.note ? `(${pay.note})` : ""}`)
+          .join("، ");
+        lines.push(`  دفعات (${e.paymentCount}): ${detail}`);
+      }
       if (e.openRequests.length) lines.push(`  طلبات مفتوحة: ${e.openRequests.join("؛ ")}`);
       if (e.notes) lines.push(`  ملاحظات: ${e.notes}`);
     });
@@ -426,8 +446,8 @@ export async function analyzeBusinessPerformance(projects, currency, userName = 
 
 export async function getProjectRecommendations(project, currency, allProjects = [], userName = OWNER.name) {
   const snap = buildLedgerSnapshot(allProjects.length ? allProjects : [project], currency, userName);
-  const balance = (Number(project.totalPrice) || 0) - (Number(project.paid) || 0);
-  const profit = (Number(project.paid) || 0) - (Number(project.costs) || 0);
+  const balance = (Number(project.totalPrice) || 0) - projectPaid(project);
+  const profit = projectPaid(project) - (Number(project.costs) || 0);
   const openReqs = (project.requests || []).filter((r) => !r.done);
 
   try {
@@ -443,7 +463,7 @@ export async function getProjectRecommendations(project, currency, allProjects =
 الهاتف: ${project.phone || "غير متوفر"}
 الحالة: ${STATUS_AR[project.status] || project.status}
 العقد: ${money(project.totalPrice, currency)}
-المستلم: ${money(project.paid, currency)}
+المستلم: ${money(projectPaid(project), currency)}
 التكاليف: ${money(project.costs, currency)}
 المستحق: ${money(balance, currency)}
 الربح الحالي: ${money(profit, currency)}
@@ -487,7 +507,7 @@ export async function chatWithAI(projects, currency, userName, userMessage, hist
 
 export async function draftWhatsAppFollowUp(project, currency, userName = OWNER.name) {
   const snap = buildLedgerSnapshot([project], currency, userName);
-  const balance = (Number(project.totalPrice) || 0) - (Number(project.paid) || 0);
+  const balance = (Number(project.totalPrice) || 0) - projectPaid(project);
   try {
     return await callAI(
       [

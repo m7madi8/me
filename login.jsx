@@ -16,7 +16,10 @@ export default function LoginScreen() {
       <div className="login-screen" dir="rtl">
         <div className="login-card gpt">
           <img src={logoMe} alt="Mohammad" className="login-logo" />
-          <p className="login-sub">أضف إعدادات Firebase في `.env` ثم أعد التشغيل.</p>
+          <p className="login-sub">
+            إعدادات Firebase غير موجودة في هذا البناء.
+            تأكد من ملف `.env` ثم أعد `npm run build` والنشر.
+          </p>
         </div>
       </div>
     );
@@ -37,7 +40,10 @@ export default function LoginScreen() {
     <div className="login-screen" dir="rtl">
       <div className="login-card gpt fade-in">
         <img src={logoMe} alt="Mohammad" className="login-logo" />
-        <p className="login-one-line">سجّل الدخول للمتابعة</p>
+        <p className="login-one-line">سجّل الدخول بحساب Google</p>
+        <p className="login-sub" style={{ marginTop: -8 }}>
+          عشان مشاريعك وأرقامك تكون نفسها على اللابتوب والتلفون.
+        </p>
 
         {error && <div className="ai-error" style={{ marginBottom: 14, textAlign: "right" }}>{error}</div>}
 
@@ -64,8 +70,8 @@ function GoogleIcon() {
 function friendlyError(err) {
   const code = err?.code || "";
   if (code.includes("popup-closed-by-user")) return "أُغلق نافذة Google قبل إكمال الدخول";
-  if (code.includes("unauthorized-domain")) return "أضف نطاق الموقع في Firebase → Authorized domains";
-  if (code.includes("operation-not-allowed")) return "فعّل Google في Firebase → Sign-in method";
+  if (code.includes("unauthorized-domain")) return "أضف نطاق الموقع في Firebase → Authentication → Settings → Authorized domains";
+  if (code.includes("operation-not-allowed")) return "فعّل Google من Firebase → Authentication → Sign-in method";
   if (code.includes("network-request-failed")) return "تحقق من الاتصال بالإنترنت";
   if (code.includes("account-exists-with-different-credential")) return "هذا الإيميل مرتبط بطريقة دخول أخرى";
   return err?.message || "حدث خطأ أثناء الدخول عبر Google";
