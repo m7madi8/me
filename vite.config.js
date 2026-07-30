@@ -4,9 +4,9 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true,
+    host: "127.0.0.1",
     port: 5173,
-    strictPort: true,
+    strictPort: false,
     proxy: {
       "/ollama": {
         target: "http://127.0.0.1:11434",
@@ -16,9 +16,9 @@ export default defineConfig({
     },
   },
   preview: {
-    host: true,
+    host: "127.0.0.1",
     port: 4173,
-    strictPort: true,
+    strictPort: false,
     proxy: {
       "/ollama": {
         target: "http://127.0.0.1:11434",

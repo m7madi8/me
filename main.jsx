@@ -5,7 +5,7 @@ import { ensureLocalAI, OWNER } from "./ai-service.js";
 import AIAdvisorPage from "./ai-panel.jsx";
 import LoginScreen from "./login.jsx";
 import logoMe from "./img/logo-me.webp";
-import "./theme-brutal.css";
+import "./theme-elegant.css";
 import {
   isFirebaseConfigured,
   watchAuth,
@@ -39,26 +39,26 @@ const LOCAL_KEY = "mh-tracker-data";
 
 const INK = {
   bg: "#050505",
-  page: "#0a0a0a",
-  pageRaised: "#121212",
-  hover: "#101010",
+  page: "#0e0e0e",
+  pageRaised: "#161616",
+  hover: "#1a1a1a",
   rule: "#242424",
   ruleFaint: "#1a1a1a",
-  text: "#f2efe6",
+  text: "#f2f0ec",
   textMuted: "#9a958c",
-  textFaint: "#5c584f",
-  white: "#f2efe6",
-  accent: "#ff2d1a",
-  sidebar: "#070707",
-  composer: "#0a0a0a",
+  textFaint: "#6a6560",
+  white: "#f2f0ec",
+  accent: "#f2f0ec",
+  sidebar: "#0a0a0a",
+  composer: "#101010",
 };
 
 const STATUS = {
-  proposed: { label: "Proposed", fg: "#9a958c", bg: "transparent", border: "#5c584f", dashed: true },
-  in_progress: { label: "In Progress", fg: "#f2efe6", bg: "transparent", border: "#ff2d1a", dashed: false },
-  review: { label: "In Review", fg: "#050505", bg: "#f2efe6", border: "#f2efe6", dashed: false },
-  delivered: { label: "Delivered", fg: "#050505", bg: "#ff2d1a", border: "#ff2d1a", dashed: false },
-  settled: { label: "Settled", fg: "#5c584f", bg: "transparent", border: "#242424", dashed: false },
+  proposed: { label: "Proposed", fg: "#9a958c", bg: "transparent", border: "#3a3a3a", dashed: true },
+  in_progress: { label: "In Progress", fg: "#f2f0ec", bg: "rgba(242,240,236,0.08)", border: "#f2f0ec", dashed: false },
+  review: { label: "In Review", fg: "#050505", bg: "#c8c4bc", border: "#c8c4bc", dashed: false },
+  delivered: { label: "Delivered", fg: "#050505", bg: "#f2f0ec", border: "#f2f0ec", dashed: false },
+  settled: { label: "Settled", fg: "#6a6560", bg: "transparent", border: "#242424", dashed: false },
 };
 const STATUS_ORDER = ["proposed", "in_progress", "review", "delivered", "settled"];
 const CURRENCIES = ["$", "\u20AA", "JOD"];
@@ -407,7 +407,7 @@ export default function MHLedger() {
       <div className="app-frame fade-in">
         <header className="header">
           <div className="brand">
-            <Logo height={40} />
+            <Logo height={28} />
             <div className="brand-meta">
               <div className="brand-mark">MOHAMMAD</div>
               {user ? (
@@ -532,7 +532,7 @@ export default function MHLedger() {
           <main className={`record-pane ${showRecord ? "is-visible" : "is-hidden"}`}>
             {!selected ? (
                 <div className="empty-record">
-                  <Logo height={56} />
+                  <Logo height={40} />
                   <p>اختر مشروعًا</p>
                 </div>
             ) : (
@@ -915,7 +915,7 @@ function RecordPage({
                 onClick={() => onToggleRequest(r.id)}
                 aria-label={r.done ? "Mark open" : "Mark done"}
               >
-                {r.done && <Check size={12} color={INK.bg} />}
+                {r.done && <Check size={12} color="#050505" />}
               </button>
               <span className={`req-text ${r.done ? "is-done" : ""}`}>{r.text}</span>
               <button type="button" className="icon-btn" onClick={() => onDeleteRequest(r.id)} aria-label="Remove">
@@ -1025,9 +1025,9 @@ function NewEntryModal({ onClose, onCreate }) {
 
 const CSS = `
   :root {
-    --font-display: "Anton", "Arial Black", Impact, sans-serif;
-    --font-body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
-    --font-mono: "Syne", "Arial Black", sans-serif;
+    --font-display: "Tajawal", "Segoe UI", Tahoma, sans-serif;
+    --font-body: "Tajawal", "Segoe UI", Tahoma, sans-serif;
+    --font-mono: "Tajawal", "Segoe UI", Tahoma, sans-serif;
   }
 
   *, *::before, *::after { box-sizing: border-box; }
@@ -1039,8 +1039,12 @@ const CSS = `
 
   .shell {
     min-height: 100vh;
-    background: ${INK.bg};
+    position: relative;
     color: ${INK.text};
+    background:
+      radial-gradient(900px 520px at 12% -8%, rgba(242, 240, 236, 0.06), transparent 55%),
+      radial-gradient(800px 480px at 100% 0%, rgba(242, 240, 236, 0.03), transparent 50%),
+      linear-gradient(165deg, #0c0c0c 0%, #050505 45%, #080808 100%);
   }
 
   .boot-screen {
@@ -1050,28 +1054,36 @@ const CSS = `
     justify-content: center;
   }
   .boot-logo {
-    height: 56px;
+    height: 44px;
     width: auto;
-    max-width: 160px;
+    max-width: 120px;
     object-fit: contain;
     display: block;
+    mix-blend-mode: lighten;
   }
 
   .app-frame {
-    max-width: 1180px;
+    max-width: 1120px;
     margin: 0 auto;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    background: ${INK.page};
+    background: rgba(14, 14, 14, 0.88);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-inline: 1px solid rgba(255, 255, 255, 0.04);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   }
 
-  .fade-in { animation: fadeIn 0.35s ease both; }
-  .slide-up { animation: slideUp 0.28s ease both; }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .fade-in { animation: fadeIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .slide-up { animation: slideUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
   @keyframes slideUp {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: none; }
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .spin { animation: spin 1.6s linear infinite; }
@@ -1083,9 +1095,9 @@ const CSS = `
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 0;
+    padding: 14px 18px;
     border-bottom: 1px solid ${INK.ruleFaint};
-    background: ${INK.sidebar};
+    background: transparent;
   }
   .brand {
     display: flex;
@@ -1104,9 +1116,10 @@ const CSS = `
   }
   .brand-mark {
     font-family: var(--font-display);
-    font-size: 28px;
-    letter-spacing: 0.04em;
-    line-height: 0.9;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1;
     color: ${INK.text};
   }
   .brand-email {
@@ -1131,6 +1144,10 @@ const CSS = `
     width: auto;
     object-fit: contain;
     display: block;
+    mix-blend-mode: lighten;
+    border: none;
+    border-radius: 0;
+    background: transparent;
   }
 
   .login-screen {
@@ -1139,7 +1156,7 @@ const CSS = `
     align-items: center;
     justify-content: center;
     padding: 24px 16px;
-    background: ${INK.bg};
+    background: transparent;
   }
   .login-shell {
     width: min(420px, 100%);
@@ -1166,7 +1183,7 @@ const CSS = `
     text-align: center;
   }
   .login-card.gpt {
-    box-shadow: 0 16px 48px rgba(0,0,0,0.28);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.45);
   }
   .login-close {
     position: absolute;
@@ -1190,7 +1207,7 @@ const CSS = `
     position: fixed;
     inset: 0;
     z-index: 70;
-    background: rgba(0,0,0,0.55);
+    background: rgba(0,0,0,0.62);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1200,16 +1217,16 @@ const CSS = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 8px 12px;
-    border-radius: 999px;
-    background: ${INK.white};
-    color: #111;
+    padding: 9px 14px;
+    border-radius: 10px;
+    background: ${INK.text};
+    color: #0a0a0a;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
     white-space: nowrap;
     flex-shrink: 0;
   }
-  .btn-login:hover { opacity: 0.92; }
+  .btn-login:hover { background: ${INK.accent}; color: #050505; }
   .btn-add {
     width: 38px;
     height: 38px;
@@ -1224,12 +1241,13 @@ const CSS = `
     flex-shrink: 0;
   }
   .login-logo {
-    height: 64px;
+    height: 48px;
     width: auto;
-    max-width: 200px;
+    max-width: 150px;
     object-fit: contain;
     margin: 0 auto 18px;
     display: block;
+    mix-blend-mode: lighten;
   }
   .login-one-line {
     margin: 0 0 22px;
@@ -1276,12 +1294,12 @@ const CSS = `
     justify-content: center;
     gap: 10px;
     padding: 12px 16px;
-    border-radius: 999px;
-    background: ${INK.white};
-    color: #1a1a1a;
+    border-radius: 14px;
+    background: ${INK.text};
+    color: #0a0a0a;
     font-family: var(--font-body);
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 700;
   }
   .btn-google:disabled { opacity: 0.6; cursor: default; }
 
@@ -1290,16 +1308,16 @@ const CSS = `
     z-index: 60;
     inset-inline-end: 18px;
     bottom: 22px;
-    width: 56px;
-    height: 56px;
+    width: 54px;
+    height: 54px;
     border-radius: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #0a0a0a;
+    background: ${INK.page};
     color: ${INK.text};
     border: 1px solid ${INK.rule};
-    box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
     padding: 8px;
   }
   .fab-logo {
@@ -1307,13 +1325,14 @@ const CSS = `
     height: 100%;
     object-fit: contain;
     display: block;
+    mix-blend-mode: lighten;
   }
-  .ai-fab.is-ready { box-shadow: 0 8px 28px rgba(0,0,0,0.35), 0 0 0 2px #4a4a4a; }
+  .ai-fab.is-ready { box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
   .ai-drawer-backdrop {
     position: fixed;
     inset: 0;
     z-index: 55;
-    background: rgba(0,0,0,0.45);
+    background: rgba(0,0,0,0.62);
     display: flex;
     justify-content: flex-start;
   }
@@ -1321,11 +1340,11 @@ const CSS = `
     width: min(440px, 100%);
     height: 100%;
     max-height: 100dvh;
-    background: ${INK.bg};
+    background: ${INK.page};
     border-inline-end: 1px solid ${INK.ruleFaint};
     display: flex;
     flex-direction: column;
-    box-shadow: 12px 0 40px rgba(0,0,0,0.4);
+    box-shadow: 12px 0 40px rgba(0,0,0,0.5);
   }
   .ai-drawer.gpt { width: min(520px, 100%); }
   @media (max-width: 560px) {
@@ -1506,12 +1525,13 @@ const CSS = `
     padding: 24px 12px;
   }
   .chat-empty-logo {
-    height: 52px;
+    height: 40px;
     width: auto;
-    max-width: 160px;
+    max-width: 120px;
     object-fit: contain;
     margin-bottom: 6px;
     display: block;
+    mix-blend-mode: lighten;
   }
   .chat-empty.gpt h2 {
     margin: 0 0 8px;
@@ -1553,12 +1573,13 @@ const CSS = `
     flex-direction: row-reverse;
   }
   .chat-avatar {
-    width: 36px;
-    height: 22px;
+    width: 28px;
+    height: 18px;
     object-fit: contain;
     flex-shrink: 0;
     margin-top: 4px;
     display: block;
+    mix-blend-mode: lighten;
   }
   .chat-bubble.gpt {
     max-width: min(92%, 420px);
@@ -1626,12 +1647,12 @@ const CSS = `
   .composer-send {
     width: 34px;
     height: 34px;
-    border-radius: 50%;
+    border-radius: 12px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: ${INK.white};
-    color: #111;
+    background: ${INK.accent};
+    color: #050505;
     flex-shrink: 0;
   }
   .composer-send:disabled {
@@ -1689,11 +1710,11 @@ const CSS = `
     justify-content: center;
     gap: 6px;
     padding: 10px 14px;
-    background: ${INK.white};
-    color: #0A0A0A;
+    background: ${INK.accent};
+    color: #050505;
     font-family: var(--font-body);
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
     border-radius: 10px;
     transition: opacity 0.15s ease, transform 0.15s ease;
   }
@@ -1715,8 +1736,9 @@ const CSS = `
     font-size: 13px;
     padding: 8px 12px;
     border-radius: 10px;
-    background: ${INK.white};
-    color: #0A0A0A;
+    background: transparent;
+    color: #9a958c;
+    border: 1px solid #3a3a3a;
     font-weight: 600;
   }
 
@@ -1724,54 +1746,54 @@ const CSS = `
   .totals {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 0;
-    padding: 2px 0;
-    border-bottom: 1px solid ${INK.ruleFaint};
-    background: ${INK.sidebar};
+    gap: 10px;
+    padding: 14px 16px 6px;
+    border-bottom: none;
+    background: transparent;
   }
   .totals.soft .total-label {
-    font-family: var(--font-body);
+    font-family: var(--font-mono);
     font-size: 11px;
-    letter-spacing: 0;
-    text-transform: none;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
   .totals.soft .total-value {
-    font-family: var(--font-body);
-    font-size: 16px;
+    font-family: var(--font-display);
+    font-size: clamp(22px, 3vw, 30px);
     font-weight: 600;
   }
   @media (min-width: 700px) {
     .totals { grid-template-columns: repeat(4, 1fr); }
   }
   .total-cell {
-    padding: 14px 18px;
-    border-inline-end: 1px solid ${INK.ruleFaint};
+    padding: 16px 14px 14px;
+    border: none;
   }
   .total-cell.is-last { border-inline-end: none; }
   @media (max-width: 699px) {
     .total-cell:nth-child(2n) { border-inline-end: none; }
-    .total-cell:nth-child(-n+2) { border-bottom: 1px solid ${INK.ruleFaint}; }
+    .total-cell:nth-child(-n+2) { border-bottom: none; }
   }
   .total-label {
-    font-family: var(--font-body);
+    font-family: var(--font-mono);
     font-size: 11px;
     color: ${INK.textFaint};
   }
   .total-value {
-    margin-top: 4px;
-    font-family: var(--font-body);
-    font-size: 16px;
+    margin-top: 8px;
+    font-family: var(--font-display);
+    font-size: 24px;
     font-weight: 600;
     color: ${INK.textMuted};
-    letter-spacing: -0.02em;
+    letter-spacing: 0.01em;
   }
-  .total-value.is-bright { color: ${INK.white}; }
+  .total-value.is-bright { color: ${INK.text}; }
 
   /* Personal briefing */
   .briefing {
     padding: 14px 22px 16px;
     border-bottom: 1px solid ${INK.rule};
-    background: linear-gradient(180deg, #141414 0%, ${INK.page} 100%);
+    background: ${INK.pageRaised};
   }
   .briefing-head {
     display: flex;
@@ -1853,7 +1875,7 @@ const CSS = `
 
   .index-pane {
     border-inline-end: 1px solid ${INK.ruleFaint};
-    background: ${INK.sidebar};
+    background: transparent;
     min-height: 420px;
   }
   .pane-label { display: none; }
@@ -1976,7 +1998,7 @@ const CSS = `
     color: ${INK.textFaint};
   }
 
-  .record-pane { background: ${INK.page}; min-height: 520px; }
+  .record-pane { background: transparent; min-height: 520px; }
   .empty-record {
     min-height: 520px;
     display: flex;
@@ -2309,8 +2331,8 @@ const CSS = `
     align-items: flex-end;
     justify-content: center;
     padding: 0;
-    background: rgba(0,0,0,0.72);
-    backdrop-filter: blur(4px);
+    background: rgba(0,0,0,0.62);
+    backdrop-filter: blur(8px);
   }
   @media (min-width: 640px) {
     .modal-backdrop {
@@ -2432,7 +2454,7 @@ const CSS = `
   .chat-compose { display: flex; gap: 8px; }
 
   .mh-scroll::-webkit-scrollbar { width: 6px; }
-  .mh-scroll::-webkit-scrollbar-thumb { background: #2B2B2B; border-radius: 4px; }
+  .mh-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
   input[type=number]::-webkit-inner-spin-button { opacity: 0.35; }
 
   @media (max-width: 480px) {
