@@ -9,13 +9,17 @@ import {
   ensureLocalAI,
   getModel,
   setModel,
+  getAiMode,
+  setAiMode,
+  getApiKey,
+  setApiKey,
   DEFAULT_MODEL,
   OWNER,
 } from "./ai-service.js";
 import logoMe from "./img/logo-me.webp";
 
 /**
- * ChatGPT-style local advisor (Ollama + Qwen3).
+ * ChatGPT-style advisor — local Ollama or online Groq.
  */
 export default function AIAdvisorPage({
   projects,
@@ -37,6 +41,8 @@ export default function AIAdvisorPage({
   const [waDraft, setWaDraft] = useState("");
   const [copied, setCopied] = useState(false);
   const [modelName, setModelName] = useState(getModel());
+  const [aiMode, setAiModeState] = useState(getAiMode());
+  const [groqKey, setGroqKey] = useState(getApiKey());
   const [statusMsg, setStatusMsg] = useState("");
   const [error, setError] = useState("");
   const chatEndRef = useRef(null);
@@ -70,7 +76,7 @@ export default function AIAdvisorPage({
   function requireLocal() {
     if (!aiReady) {
       setTab("settings");
-      setError("Qwen3 غير جاهز. ثبّت Ollama ثم افحص الاتصال.");
+      setError("الذكاء غير جاهز. اختر الوضع (محلي / تلقائي / أونلاين) وافحص الاتصال.");
       return false;
     }
     setError("");
@@ -142,8 +148,10 @@ export default function AIAdvisorPage({
   }
 
   async function saveSettings() {
+    setAiMode(aiMode);
     setModel(modelName.trim() || DEFAULT_MODEL);
     setModelName(getModel());
+    setApiKey(groqKey);
     setLoading(true);
     const status = await refreshStatus();
     setLoading(false);
@@ -339,6 +347,28 @@ export default function AIAdvisorPage({
 
         {tab === "settings" && (
           <section className="ai-panel soft-panel form-stack">
+            <div className="mode-seg" role="group" aria-label="وضع الذكاء">
+              {[
+                { id: "local", label: "محلي" },
+                { id: "auto", label: "تلقائي" },
+                { id: "online", label: "أونلاين" },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`mode-seg-btn ${aiMode === m.id ? "is-active" : ""}`}
+                  onClick={() => setAiModeState(m.id)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <p className="field-hint" style={{ margin: 0 }}>
+              {aiMode === "local" && "Ollama على جهازك فقط."}
+              {aiMode === "online" && "Groq عبر الإنترنت — مناسب خارج البيت."}
+              {aiMode === "auto" && "يجرّب المحلي أولًا، وإن فشل يستخدم الأونلاين."}
+            </p>
+
             <label className="field">
               <input
                 className="field-input"
@@ -347,17 +377,34 @@ export default function AIAdvisorPage({
                 placeholder={OWNER.name}
               />
             </label>
-            <label className="field">
-              <input
-                className="field-input"
-                value={modelName}
-                onChange={(e) => setModelName(e.target.value)}
-                placeholder={DEFAULT_MODEL}
-              />
-            </label>
+
+            {aiMode !== "online" && (
+              <label className="field">
+                <input
+                  className="field-input"
+                  value={modelName}
+                  onChange={(e) => setModelName(e.target.value)}
+                  placeholder={DEFAULT_MODEL}
+                />
+              </label>
+            )}
+
+            {aiMode !== "local" && (
+              <label className="field">
+                <input
+                  className="field-input"
+                  type="password"
+                  autoComplete="off"
+                  value={groqKey}
+                  onChange={(e) => setGroqKey(e.target.value)}
+                  placeholder="مفتاح Groq (gsk_…)"
+                />
+              </label>
+            )}
+
             {statusMsg && <div className={`ai-error soft ${aiReady ? "is-ok" : ""}`}>{statusMsg}</div>}
-            <button className="btn-primary btn-block" type="button" onClick={saveSettings}>
-              فحص الاتصال
+            <button className="btn-primary btn-block" type="button" onClick={saveSettings} disabled={loading}>
+              {loading ? "…" : "حفظ وفحص"}
             </button>
           </section>
         )}

@@ -1,11 +1,16 @@
 /**
- * Mohammad — personal local AI advisor.
- * Runs fully offline via Ollama + Qwen3 on this machine.
+ * Mohammad — personal AI advisor.
+ * Local: Ollama + Qwen3 on this machine.
+ * Online: Groq cloud (for use outside home).
  */
 
 const DEFAULT_MODEL = "qwen3";
 const MODEL_KEY = "mohammad-ollama-model";
 const BASE_KEY = "mohammad-ollama-base";
+const MODE_KEY = "mohammad-ai-mode"; // local | online | auto
+const GROQ_KEY = "mohammad-groq-key";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 const OWNER = {
   name: "mohammad",
@@ -60,13 +65,27 @@ export function setModel(name) {
   localStorage.setItem(MODEL_KEY, (name || DEFAULT_MODEL).trim());
 }
 
-/** Compatibility: "ready" means local Ollama answered. */
-export function getApiKey() {
-  return localStorage.getItem("mohammad-ollama-ready") === "1" ? "local" : "";
+/** @returns {"local"|"online"|"auto"} */
+export function getAiMode() {
+  const m = localStorage.getItem(MODE_KEY);
+  if (m === "local" || m === "online" || m === "auto") return m;
+  return "auto";
 }
 
-export function setApiKey() {
-  /* no cloud key — local only */
+export function setAiMode(mode) {
+  if (mode === "local" || mode === "online" || mode === "auto") {
+    localStorage.setItem(MODE_KEY, mode);
+  }
+}
+
+export function getApiKey() {
+  return (localStorage.getItem(GROQ_KEY) || import.meta.env.VITE_GROQ_API_KEY || "").trim();
+}
+
+export function setApiKey(key) {
+  const v = (key || "").trim();
+  if (v) localStorage.setItem(GROQ_KEY, v);
+  else localStorage.removeItem(GROQ_KEY);
 }
 
 export async function ensureApiKeySeeded() {
@@ -74,10 +93,38 @@ export async function ensureApiKeySeeded() {
 }
 
 export async function ensureLocalAI() {
-  const status = await pingOllama();
-  if (status.ok) localStorage.setItem("mohammad-ollama-ready", "1");
-  else localStorage.removeItem("mohammad-ollama-ready");
-  return status;
+  const mode = getAiMode();
+
+  if (mode === "online") {
+    if (getApiKey()) {
+      localStorage.setItem("mohammad-ollama-ready", "1");
+      return { ok: true, channel: "online", message: "جاهز أونلاين عبر Groq" };
+    }
+    localStorage.removeItem("mohammad-ollama-ready");
+    return {
+      ok: false,
+      channel: "online",
+      message: "أضف مفتاح Groq في الإعدادات (أو VITE_GROQ_API_KEY في .env ثم أعد البناء).",
+    };
+  }
+
+  const local = await pingOllama();
+  if (local.ok) {
+    localStorage.setItem("mohammad-ollama-ready", "1");
+    return { ...local, channel: "local" };
+  }
+
+  if (mode === "auto" && getApiKey()) {
+    localStorage.setItem("mohammad-ollama-ready", "1");
+    return {
+      ok: true,
+      channel: "online",
+      message: "المحلي غير متاح — سيستخدم الأونلاين (Groq) خارج البيت.",
+    };
+  }
+
+  localStorage.removeItem("mohammad-ollama-ready");
+  return { ...local, channel: "local" };
 }
 
 export async function pingOllama() {
@@ -108,8 +155,8 @@ export async function pingOllama() {
       ok: false,
       models: [],
       message: hosted
-        ? "من الرابط المنشور: شغّل Ollama على هذا الجهاز، ثم في PowerShell مرة واحدة:\nsetx OLLAMA_ORIGINS \"*\"\nوأعد تشغيل Ollama، ثم اضغط فحص الاتصال."
-        : "Ollama غير متصل. شغّله محليًا ثم:\nollama pull qwen3",
+        ? "Ollama غير متصل على هذا الجهاز.\nللعمل خارج البيت: اختر «أونلاين» أو «تلقائي» وأضف مفتاح Groq."
+        : "Ollama غير متصل. شغّله محليًا ثم:\nollama pull qwen3\nأو فعّل الأونلاين بمفتاح Groq.",
     };
   }
 }
@@ -153,80 +200,55 @@ export function buildLedgerSnapshot(projects, currency, userName = OWNER.name) {
         name: p.name || "بدون عنوان",
         client: p.client || "بدون عميل",
         phone: p.phone || "",
-        status: p.status,
-        statusAr: STATUS_AR[p.status] || p.status,
+        status: STATUS_AR[p.status] || p.status,
         contracted,
         paid,
         costs,
         balanceDue: contracted - paid,
         profit: paid - costs,
-        notes: (p.notes || "").trim(),
-        openRequests: openReqs.map((r) => r.text),
-        doneRequests: (p.requests || []).filter((r) => r.done).map((r) => r.text),
+        notes: (p.notes || "").slice(0, 180),
+        openRequests: openReqs.map((r) => r.text).slice(0, 6),
       };
     });
 
-  const dueSoon = entries
-    .filter((e) => e.balanceDue > 0)
-    .sort((a, b) => b.balanceDue - a.balanceDue);
-
-  const active = entries.filter((e) =>
-    ["proposed", "in_progress", "review", "delivered"].includes(e.status)
-  );
-
   return {
     owner: userName || OWNER.name,
-    atelier: OWNER.atelier,
     currency,
-    projectCount: list.length,
+    counts: { projects: list.length, byStatus },
     totals,
-    byStatus,
-    dueSoon,
-    active,
     entries,
   };
 }
 
 function snapshotText(snap) {
   const lines = [
-    `صاحب السجل: ${snap.owner} — ${snap.atelier}`,
+    `المالك: ${snap.owner}`,
     `العملة: ${snap.currency}`,
-    `عدد المشاريع: ${snap.projectCount}`,
-    `المتعاقد: ${money(snap.totals.contracted, snap.currency)}`,
-    `المستلم: ${money(snap.totals.paid, snap.currency)}`,
-    `التكاليف: ${money(snap.totals.costs, snap.currency)}`,
-    `المستحق: ${money(snap.totals.outstanding, snap.currency)}`,
-    `صافي الربح: ${money(snap.totals.profit, snap.currency)}`,
-    `الحالات: ${Object.entries(snap.byStatus)
+    `عدد المشاريع: ${snap.counts.projects}`,
+    `متعاقد: ${money(snap.totals.contracted, snap.currency)} | مستلم: ${money(snap.totals.paid, snap.currency)} | متبقي: ${money(snap.totals.outstanding, snap.currency)} | صافي: ${money(snap.totals.profit, snap.currency)}`,
+    `حسب الحالة: ${Object.entries(snap.counts.byStatus)
       .map(([k, v]) => `${STATUS_AR[k] || k}=${v}`)
-      .join(" | ") || "لا يوجد"}`,
+      .join("، ") || "لا شيء"}`,
     "",
-    "المشاريع (من الأحدث):",
+    "المشاريع:",
   ];
 
   if (!snap.entries.length) {
-    lines.push("- لا توجد إدخالات بعد.");
+    lines.push("- السجل فارغ.");
   } else {
-    for (const e of snap.entries) {
+    snap.entries.forEach((e) => {
       lines.push(
-        [
-          `${e.index}. «${e.name}» | عميل: ${e.client}${e.phone ? ` | هاتف: ${e.phone}` : ""}`,
-          `   الحالة: ${e.statusAr} | عقد: ${money(e.contracted, snap.currency)} | مستلم: ${money(e.paid, snap.currency)} | تكاليف: ${money(e.costs, snap.currency)}`,
-          `   مستحق: ${money(e.balanceDue, snap.currency)} | ربح: ${money(e.profit, snap.currency)}`,
-          e.notes ? `   ملاحظات: ${e.notes}` : null,
-          e.openRequests.length
-            ? `   طلبات مفتوحة: ${e.openRequests.join("؛ ")}`
-            : "   طلبات مفتوحة: لا يوجد",
-        ]
-          .filter(Boolean)
-          .join("\n")
+        `- #${e.index} «${e.name}» | ${e.client} | ${e.status} | عقد ${money(e.contracted, snap.currency)} | مدفوع ${money(e.paid, snap.currency)} | متبقي ${money(e.balanceDue, snap.currency)} | ربح ${money(e.profit, snap.currency)}${e.phone ? ` | هاتف ${e.phone}` : ""}`
       );
-    }
+      if (e.openRequests.length) lines.push(`  طلبات مفتوحة: ${e.openRequests.join("؛ ")}`);
+      if (e.notes) lines.push(`  ملاحظات: ${e.notes}`);
+    });
   }
 
-  if (snap.dueSoon.length) {
+  const due = snap.entries.filter((e) => e.balanceDue > 0).sort((a, b) => b.balanceDue - a.balanceDue);
+  if (due.length) {
     lines.push("", "أعلى المستحقات:");
-    snap.dueSoon.slice(0, 5).forEach((e) => {
+    due.slice(0, 5).forEach((e) => {
       lines.push(`- ${e.name} (${e.client}): ${money(e.balanceDue, snap.currency)}`);
     });
   }
@@ -236,7 +258,6 @@ function snapshotText(snap) {
 
 function systemPrompt(snap) {
   return `أنت «مستشار Mohammad» — المساعد الشخصي الحصري لـ ${snap.owner}.
-تعمل محليًا بالكامل (Ollama / Qwen3) بدون إنترنت.
 لا تخدم أي شخص آخر. كل إجاباتك لمحمد فقط («أنت»، «عندك»، «حرّك»).
 
 هويتك:
@@ -274,7 +295,7 @@ async function callLocal(messages, { temperature = 0.35, maxTokens = 1400 } = {}
       }),
     });
   } catch (_) {
-    throw new Error("تعذّر الاتصال بـ Ollama المحلي على هذا الجهاز. شغّل Ollama ثم أعد المحاولة.");
+    throw new Error("تعذّر الاتصال بـ Ollama المحلي على هذا الجهاز.");
   }
 
   if (!res.ok) {
@@ -296,10 +317,70 @@ async function callLocal(messages, { temperature = 0.35, maxTokens = 1400 } = {}
   return text;
 }
 
+async function callOnline(messages, { temperature = 0.35, maxTokens = 1400 } = {}) {
+  const key = getApiKey();
+  if (!key) {
+    throw new Error("مفتاح Groq غير موجود. أضفه من الإعدادات أو من console.groq.com");
+  }
+
+  let res;
+  try {
+    res = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    });
+  } catch (_) {
+    throw new Error("تعذّر الاتصال بـ Groq. تحقق من الإنترنت.");
+  }
+
+  if (!res.ok) {
+    let detail = `Groq رفض الطلب (${res.status})`;
+    try {
+      const err = await res.json();
+      detail = err.error?.message || err.error || detail;
+    } catch (_) {}
+    if (res.status === 401) detail = "مفتاح Groq غير صالح. أنشئ مفتاحًا جديدًا من console.groq.com";
+    throw new Error(detail);
+  }
+
+  const data = await res.json();
+  const text = stripThink(data.choices?.[0]?.message?.content || "");
+  if (!text) throw new Error("رد فارغ من Groq");
+  return text;
+}
+
+/** Route by mode: local | online | auto (local then online). */
+async function callAI(messages, opts = {}) {
+  const mode = getAiMode();
+
+  if (mode === "online") return callOnline(messages, opts);
+  if (mode === "local") return callLocal(messages, opts);
+
+  try {
+    return await callLocal(messages, opts);
+  } catch (localErr) {
+    if (!getApiKey()) throw localErr;
+    try {
+      return await callOnline(messages, opts);
+    } catch (onlineErr) {
+      throw new Error(`${localErr.message}\n\nالأونلاين أيضًا فشل: ${onlineErr.message}`);
+    }
+  }
+}
+
 export async function getDailyBriefing(projects, currency, userName = OWNER.name) {
   const snap = buildLedgerSnapshot(projects, currency, userName);
   try {
-    return await callLocal(
+    return await callAI(
       [
         { role: "system", content: systemPrompt(snap) },
         {
@@ -320,7 +401,7 @@ export async function getDailyBriefing(projects, currency, userName = OWNER.name
 export async function analyzeBusinessPerformance(projects, currency, userName = OWNER.name) {
   const snap = buildLedgerSnapshot(projects, currency, userName);
   try {
-    return await callLocal(
+    return await callAI(
       [
         { role: "system", content: systemPrompt(snap) },
         {
@@ -350,7 +431,7 @@ export async function getProjectRecommendations(project, currency, allProjects =
   const openReqs = (project.requests || []).filter((r) => !r.done);
 
   try {
-    return await callLocal(
+    return await callAI(
       [
         { role: "system", content: systemPrompt(snap) },
         {
@@ -398,7 +479,7 @@ export async function chatWithAI(projects, currency, userName, userMessage, hist
   ];
 
   try {
-    return await callLocal(messages, { temperature: 0.4, maxTokens: 1200 });
+    return await callAI(messages, { temperature: 0.4, maxTokens: 1200 });
   } catch (error) {
     return `خطأ: ${error.message}`;
   }
@@ -408,7 +489,7 @@ export async function draftWhatsAppFollowUp(project, currency, userName = OWNER.
   const snap = buildLedgerSnapshot([project], currency, userName);
   const balance = (Number(project.totalPrice) || 0) - (Number(project.paid) || 0);
   try {
-    return await callLocal(
+    return await callAI(
       [
         { role: "system", content: systemPrompt(snap) },
         {
@@ -425,4 +506,4 @@ export async function draftWhatsAppFollowUp(project, currency, userName = OWNER.
   }
 }
 
-export { OWNER, DEFAULT_MODEL };
+export { OWNER, DEFAULT_MODEL, GROQ_MODEL };

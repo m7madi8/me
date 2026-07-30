@@ -407,7 +407,7 @@ export default function MHLedger() {
         </div>
       </div>
 
-      {!aiOpen && (
+      {!aiOpen && !showNewForm && (
         <button
           type="button"
           className={`ai-fab ${aiReady ? "is-ready" : ""}`}
@@ -1897,6 +1897,31 @@ const CSS = `
     font-weight: 600;
   }
   .form-stack { display: flex; flex-direction: column; gap: 16px; }
+  .mode-seg {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 12px;
+    background: ${INK.sidebar};
+    border: 1px solid ${INK.ruleFaint};
+  }
+  .mode-seg-btn {
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: 9px;
+    font-size: 13px;
+    color: ${INK.textFaint};
+  }
+  .mode-seg-btn.is-active {
+    background: ${INK.pageRaised};
+    color: ${INK.text};
+    font-weight: 600;
+  }
+  .field-hint {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: ${INK.textFaint};
+  }
 
   .ai-body {
     font-family: var(--font-body);
